@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU-Accelerated AI-Enhanced QEC Decoder</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root { --bg:#0e1116; --card:#161b22; --fg:#e6edf3; --mut:#8b949e; --acc:#76b900; --line:#30363d; }
+  @media (prefers-color-scheme: light) { :root { --bg:#fff; --card:#f6f8fa; --fg:#1f2328; --mut:#59636e; --line:#d0d7de; } }
+  * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.55 system-ui,Segoe UI,sans-serif }
+  header { padding:40px 20px 24px; max-width:1100px; margin:auto }
+  h1 { margin:0 0 8px; font-size:30px } h2 { margin:34px 0 10px; font-size:21px; border-bottom:1px solid var(--line); padding-bottom:6px }
+  .sub { color:var(--mut); max-width:800px } main { max-width:1100px; margin:auto; padding:0 20px 60px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin:12px 0 }
+  .row { display:flex; gap:14px; flex-wrap:wrap } .row > * { flex:1 1 440px; min-width:0 }
+  select { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; margin-right:8px }
+  table { border-collapse:collapse; width:100%; font-size:13px } th,td { text-align:right; padding:5px 8px; border-bottom:1px solid var(--line) }
+  th:first-child,td:first-child { text-align:left } .note { color:var(--mut); font-size:13px }
+  .pill { display:inline-block; background:var(--acc); color:#10150a; border-radius:99px; padding:1px 10px; font-size:12px; font-weight:600 }
+  pre { background:var(--card); border:1px solid var(--line); padding:12px; border-radius:8px; overflow:auto; font-size:13px }
+  .warn { border-left:4px solid #d29922; padding:8px 12px; background:var(--card); border-radius:4px }
+</style>
+</head>
+<body>
+<header>
+  <span class="pill">NVIDIA / Open Hackathons</span>
+  <h1>GPU-accelerated, AI-enhanced QEC decoding</h1>
+  <p class="sub">A hybrid pipeline: a fast GPU pre-decoder clears the easy, local syndromes; only the hard residual reaches the exact global decoder
+  (MWPM for the surface code, BP+OSD for qLDPC). Every number below is measured by the benchmark harness in this repo.</p>
+  <div class="card"><b>Run:</b> <select id="run"></select><span id="meta" class="note"></span></div>
+</header>
+<main>
+  <div class="warn note" id="honesty"></div>
+
+  <h2>Surface code (circuit-level noise, Stim)</h2>
+  <div class="card">Distance <select id="d"></select> <span class="note">Latency table and curves update with the selection.</span></div>
+  <div class="row">
+    <div class="card"><div id="ler"></div></div>
+    <div class="card"><div id="thr"></div></div>
+  </div>
+  <div class="row">
+    <div class="card"><div id="spd"></div></div>
+    <div class="card"><div id="acc"></div></div>
+  </div>
+  <div class="card"><b>Single-shot latency (µs) &amp; throughput</b><div id="lat"></div></div>
+
+  <h2>qLDPC BP+OSD (bivariate-bicycle codes, code-capacity noise)</h2>
+  <div class="row">
+    <div class="card"><div id="q_thr"></div></div>
+    <div class="card"><div id="q_ler"></div></div>
+  </div>
+  <div class="card"><b>Details</b><div id="q_tab"></div></div>
+
+  <h2>Reproduce</h2>
+  <pre>git clone &lt;repo&gt; &amp;&amp; cd &lt;repo&gt;
+python -m venv .venv &amp;&amp; . .venv/bin/activate
+pip install -r requirements.txt &amp;&amp; pip install -e .
+python scripts/run_benchmarks.py --profile full --device auto --tag my-run
+python scripts/make_report.py</pre>
+  <p class="note">Or open <code>notebooks/01_run_benchmarks_colab.ipynb</code> in Google Colab (free T4 GPU).</p>
+</main>
+<script>
+const RUNS = {"local-cpu": {"meta": {"timestamp": "2026-10-01 17:05:46", "platform": "Windows-11-10.0.26200-SP0", "python": "3.14.3", "cpu_count": 12, "torch": "2.14.1+cpu", "stim": "1.16.0", "pymatching": "2.4.0", "device": "cpu", "gpu": null, "cudaq_qec": "unavailable (ModuleNotFoundError: No module named 'cudaq_qec')", "profile": "quick"}, "surface": [{"code": "surface", "d": 5, "rounds": 5, "p": 0.002, "decoder": "pymatching (CPU)", "device": "cpu", "shots": 20000, "errors": 23, "ler": 0.00115, "ler_lo": 0.0007664538827015, "ler_hi": 0.001725147530499, "throughput_sps": 408250.7476768818, "lat_p50_us": 19.500002963468432, "lat_p95_us": 40.92500530532559, "lat_p99_us": 63.63000400597227, "accept_rate": 0.0, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=9.4;thr_logit=inf"}, {"code": "surface", "d": 5, "rounds": 5, "p": 0.002, "decoder": "zero-syndrome shortcut + pymatching", "device": "cpu", "shots": 20000, "errors": 23, "ler": 0.00115, "ler_lo": 0.0007664538827015, "ler_hi": 0.001725147530499, "throughput_sps": 395305.3536301636, "lat_p50_us": 25.000001187436283, "lat_p95_us": 63.01999892457386, "lat_p99_us": 180.6550049514041, "accept_rate": 0.182, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=9.4;thr_logit=inf"}, {"code": "surface", "d": 5, "rounds": 5, "p": 0.002, "decoder": "GPU local pre-decoder + pymatching", "device": "cpu", "shots": 20000, "errors": 24, "ler": 0.0012, "ler_lo": 0.0008065558558783, "ler_hi": 0.0017850263530109, "throughput_sps": 133591.69968309804, "lat_p50_us": 471.5000031865202, "lat_p95_us": 854.3399926566044, "lat_p99_us": 1386.6060026339248, "accept_rate": 0.49185, "syndrome_weight_kept": 0.3704550717924965, "extra": "gate_train_s=9.4;thr_logit=inf"}, {"code": "surface", "d": 5, "rounds": 5, "p": 0.002, "decoder": "AI gate (MLP, strict) + pymatching", "device": "cpu", "shots": 20000, "errors": 24, "ler": 0.0012, "ler_lo": 0.0008065558558783, "ler_hi": 0.0017850263530109, "throughput_sps": 260186.9703493869, "lat_p50_us": 330.1999968243763, "lat_p95_us": 500.48999692080525, "lat_p99_us": 654.2149999586394, "accept_rate": 0.1046, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=9.4;thr_logit=11.890"}, {"code": "surface", "d": 5, "rounds": 5, "p": 0.004, "decoder": "pymatching (CPU)", "device": "cpu", "shots": 20000, "errors": 148, "ler": 0.0074, "ler_lo": 0.0063031509026178, "ler_hi": 0.0086860499716782, "throughput_sps": 203460.86937841756, "lat_p50_us": 20.799998310394585, "lat_p95_us": 33.70500853634439, "lat_p99_us": 45.96099955961093, "accept_rate": 0.0, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=6.8;thr_logit=inf"}, {"code": "surface", "d": 5, "rounds": 5, "p": 0.004, "decoder": "zero-syndrome shortcut + pymatching", "device": "cpu", "shots": 20000, "errors": 148, "ler": 0.0074, "ler_lo": 0.0063031509026178, "ler_hi": 0.0086860499716782, "throughput_sps": 189948.67585980563, "lat_p50_us": 27.050002245232463, "lat_p95_us": 63.00499953795224, "lat_p99_us": 112.84999811323328, "accept_rate": 0.03085, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=6.8;thr_logit=inf"}, {"code": "surface", "d": 5, "rounds": 5, "p": 0.004, "decoder": "GPU local pre-decoder + pymatching", "device": "cpu", "shots": 20000, "errors": 154, "ler": 0.0077, "ler_lo": 0.0065795185139049, "ler_hi": 0.0090095671345237, "throughput_sps": 105645.09270028229, "lat_p50_us": 500.8000007364899, "lat_p95_us": 865.4749974084551, "lat_p99_us": 1116.7479964205984, "accept_rate": 0.20935, "syndrome_weight_kept": 0.5039809863339275, "extra": "gate_train_s=6.8;thr_logit=inf"}, {"code": "surface", "d": 5, "rounds": 5, "p": 0.004, "decoder": "AI gate (MLP, strict) + pymatching", "device": "cpu", "shots": 20000, "errors": 157, "ler": 0.00785, "ler_lo": 0.0067178774966551, "ler_hi": 0.0091711505388397, "throughput_sps": 149359.7321744002, "lat_p50_us": 334.1000046930276, "lat_p95_us": 567.6849992596543, "lat_p99_us": 835.6279891449958, "accept_rate": 0.07525, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=6.8;thr_logit=9.062"}, {"code": "surface", "d": 7, "rounds": 7, "p": 0.002, "decoder": "pymatching (CPU)", "device": "cpu", "shots": 20000, "errors": 2, "ler": 0.0001, "ler_lo": 2.742346122944835e-05, "ler_hi": 0.000364581242507, "throughput_sps": 276037.20983973047, "lat_p50_us": 10.899995686486363, "lat_p95_us": 15.80000389367342, "lat_p99_us": 22.12299368693491, "accept_rate": 0.0, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=5.1;thr_logit=inf"}, {"code": "surface", "d": 7, "rounds": 7, "p": 0.002, "decoder": "zero-syndrome shortcut + pymatching", "device": "cpu", "shots": 20000, "errors": 2, "ler": 0.0001, "ler_lo": 2.742346122944835e-05, "ler_hi": 0.000364581242507, "throughput_sps": 265187.2752674124, "lat_p50_us": 14.399993233382702, "lat_p95_us": 22.40500980406068, "lat_p99_us": 27.602006302913647, "accept_rate": 0.0071, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=5.1;thr_logit=inf"}, {"code": "surface", "d": 7, "rounds": 7, "p": 0.002, "decoder": "GPU local pre-decoder + pymatching", "device": "cpu", "shots": 20000, "errors": 5, "ler": 0.00025, "ler_lo": 0.0001067880591942, "ler_hi": 0.0005851590316085, "throughput_sps": 81220.68187227768, "lat_p50_us": 222.2999974037521, "lat_p95_us": 330.41999777196907, "lat_p99_us": 427.8989978774915, "accept_rate": 0.17715, "syndrome_weight_kept": 0.3700494755402624, "extra": "gate_train_s=5.1;thr_logit=inf"}, {"code": "surface", "d": 7, "rounds": 7, "p": 0.002, "decoder": "AI gate (MLP, strict) + pymatching", "device": "cpu", "shots": 20000, "errors": 2, "ler": 0.0001, "ler_lo": 2.742346122944835e-05, "ler_hi": 0.000364581242507, "throughput_sps": 181896.39726203552, "lat_p50_us": 152.24999515339732, "lat_p95_us": 229.4149999215732, "lat_p99_us": 326.51399698806915, "accept_rate": 0.0003, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=5.1;thr_logit=32.164"}, {"code": "surface", "d": 7, "rounds": 7, "p": 0.004, "decoder": "pymatching (CPU)", "device": "cpu", "shots": 20000, "errors": 85, "ler": 0.00425, "ler_lo": 0.0034386853721535, "ler_hi": 0.0052517253737503, "throughput_sps": 136020.27790146228, "lat_p50_us": 14.299992471933365, "lat_p95_us": 25.30500350985676, "lat_p99_us": 41.61399672739206, "accept_rate": 0.0, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=4.7;thr_logit=inf"}, {"code": "surface", "d": 7, "rounds": 7, "p": 0.004, "decoder": "zero-syndrome shortcut + pymatching", "device": "cpu", "shots": 20000, "errors": 85, "ler": 0.00425, "ler_lo": 0.0034386853721535, "ler_hi": 0.0052517253737503, "throughput_sps": 133398.78767068122, "lat_p50_us": 17.600003047846258, "lat_p95_us": 27.80000795610249, "lat_p99_us": 36.71198865049517, "accept_rate": 0.0001, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=4.7;thr_logit=inf"}, {"code": "surface", "d": 7, "rounds": 7, "p": 0.004, "decoder": "GPU local pre-decoder + pymatching", "device": "cpu", "shots": 20000, "errors": 98, "ler": 0.0049, "ler_lo": 0.0040227428435847, "ler_hi": 0.005967418246273, "throughput_sps": 62286.76515040318, "lat_p50_us": 227.89999638916925, "lat_p95_us": 349.7700003208592, "lat_p99_us": 477.69599783350696, "accept_rate": 0.0173, "syndrome_weight_kept": 0.5357780253803603, "extra": "gate_train_s=4.7;thr_logit=inf"}, {"code": "surface", "d": 7, "rounds": 7, "p": 0.004, "decoder": "AI gate (MLP, strict) + pymatching", "device": "cpu", "shots": 20000, "errors": 89, "ler": 0.00445, "ler_lo": 0.0036178883290937, "ler_hi": 0.0054724455995652, "throughput_sps": 103532.90508922124, "lat_p50_us": 154.2999962111935, "lat_p95_us": 218.3199889259413, "lat_p99_us": 264.8039936320856, "accept_rate": 0.0114, "syndrome_weight_kept": 1.0, "extra": "gate_train_s=4.7;thr_logit=14.859"}], "qldpc": [{"code": "BB[[72,12,6]]", "d": 0, "rounds": 0, "p": 0.02, "decoder": "ldpc BP+OSD (CPU)", "device": "cpu", "shots": 1000, "errors": 10, "ler": 0.01, "ler_lo": 0.0054406953092705, "ler_hi": 0.0183096653053921, "throughput_sps": 97658.15736941189, "lat_p50_us": 8.300004992634058, "lat_p95_us": 18.729997100308527, "lat_p99_us": 170.3000001725739, "accept_rate": null, "extra": "code-capacity noise; accept_rate = BP converged fraction"}, {"code": "BB[[72,12,6]]", "d": 0, "rounds": 0, "p": 0.02, "decoder": "GPU min-sum BP + OSD fallback", "device": "cpu", "shots": 1000, "errors": 10, "ler": 0.01, "ler_lo": 0.0054406953092705, "ler_hi": 0.0183096653053921, "throughput_sps": 641.0116702546959, "lat_p50_us": 480.0000024260953, "lat_p95_us": 1226.3299940968836, "lat_p99_us": 17979.513994650893, "accept_rate": 1.0, "extra": "code-capacity noise; accept_rate = BP converged fraction"}, {"code": "BB[[72,12,6]]", "d": 0, "rounds": 0, "p": 0.04, "decoder": "ldpc BP+OSD (CPU)", "device": "cpu", "shots": 1000, "errors": 88, "ler": 0.088, "ler_lo": 0.0719807309854306, "ler_hi": 0.1071726334497551, "throughput_sps": 50175.36290416184, "lat_p50_us": 10.550000297371298, "lat_p95_us": 33.604993950575555, "lat_p99_us": 194.01099227252405, "accept_rate": null, "extra": "code-capacity noise; accept_rate = BP converged fraction"}, {"code": "BB[[72,12,6]]", "d": 0, "rounds": 0, "p": 0.04, "decoder": "GPU min-sum BP + OSD fallback", "device": "cpu", "shots": 1000, "errors": 88, "ler": 0.088, "ler_lo": 0.0719807309854306, "ler_hi": 0.1071726334497551, "throughput_sps": 632.6725785268193, "lat_p50_us": 802.5499919313006, "lat_p95_us": 4681.01499573094, "lat_p99_us": 17837.514997372622, "accept_rate": 1.0, "extra": "code-capacity noise; accept_rate = BP converged fraction"}]}};
+const $ = id => document.getElementById(id);
+const fmt = (x, k=0) => x==null ? "-" : Number(x).toLocaleString(undefined,{maximumFractionDigits:k});
+const colors = ["#8b949e","#d29922","#76b900","#58a6ff","#f778ba","#a371f7"];
+const layout = (t, xt, yt, ytype) => ({title:{text:t,font:{size:14}}, paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
+  font:{color:getComputedStyle(document.body).color}, xaxis:{title:xt, gridcolor:"#30363d55"}, yaxis:{title:yt, type:ytype, gridcolor:"#30363d55"},
+  margin:{l:60,r:10,t:40,b:50}, legend:{orientation:"h", y:-0.28}, height:340});
+function groupBy(rows, key){ const m={}; rows.forEach(r=>(m[r[key]] ||= []).push(r)); return m; }
+
+function render(){
+  const tag = $("run").value, run = RUNS[tag], m = run.meta || {};
+  $("meta").textContent = ` device=${m.device||"?"} gpu=${m.gpu||"none (CPU run)"} torch=${m.torch||"?"} cudaq-qec=${m.cudaq_qec||"?"}`;
+  $("honesty").innerHTML = m.gpu ? "GPU run: numbers measured on <b>"+m.gpu+"</b>." :
+    "<b>CPU-only run.</b> The GPU pre-decoder is running on CPU here, so it is <i>not</i> expected to beat PyMatching in this run. Re-run on a GPU (Colab) for the accelerated numbers.";
+  const S = run.surface || [];
+  const ds = [...new Set(S.map(r=>r.d))]; if(!$("d").options.length) ds.forEach(d=>$("d").add(new Option("d="+d, d)));
+  const d = +$("d").value || ds[0];
+  const rows = S.filter(r=>r.d===d), dec = groupBy(rows,"decoder");
+  const names = Object.keys(dec);
+  const traces = (key, mode="lines+markers") => names.map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r[key]), name:n, mode, marker:{color:colors[i%6]}, line:{color:colors[i%6]}}));
+  Plotly.newPlot("ler", traces("ler"), layout("Logical error rate vs physical p (d="+d+")","physical error rate p","LER","log"), {displayModeBar:false});
+  Plotly.newPlot("thr", traces("throughput_sps"), layout("Batched throughput","physical error rate p","shots / s","log"), {displayModeBar:false});
+  const base = Object.fromEntries((dec["pymatching (CPU)"]||[]).map(r=>[r.p,r.throughput_sps]));
+  const sp = names.filter(n=>n!=="pymatching (CPU)").map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r.throughput_sps/base[r.p]), name:n, type:"bar", marker:{color:colors[(i+1)%6]}}));
+  Plotly.newPlot("spd", sp, {...layout("Throughput speed-up vs PyMatching","physical error rate p","x faster"), barmode:"group"}, {displayModeBar:false});
+  const ac = names.filter(n=>n!=="pymatching (CPU)").map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r.accept_rate), name:n, type:"bar", marker:{color:colors[(i+1)%6]}}));
+  Plotly.newPlot("acc", ac, {...layout("Shots fully resolved on the fast path","physical error rate p","fraction"), barmode:"group"}, {displayModeBar:false});
+  $("lat").innerHTML = "<table><tr><th>decoder</th><th>p</th><th>LER</th><th>throughput/s</th><th>p50 µs</th><th>p95 µs</th><th>p99 µs</th><th>fast-path</th></tr>" +
+    rows.map(r=>`<tr><td>${r.decoder}</td><td>${r.p}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p95_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${fmt(100*r.accept_rate,1)}%</td></tr>`).join("") + "</table>";
+
+  const Q = run.qldpc || [], qd = groupBy(Q,"decoder"), qn = Object.keys(qd);
+  const lab = r => r.code+" p="+r.p;
+  const qtr = (key,type) => qn.map((n,i)=>({x:qd[n].map(lab), y:qd[n].map(r=>r[key]), name:n, type, marker:{color:colors[i%6]}}));
+  Plotly.newPlot("q_thr", qtr("throughput_sps","bar"), {...layout("BP+OSD throughput","code / p","shots / s","log"), barmode:"group"}, {displayModeBar:false});
+  Plotly.newPlot("q_ler", qtr("ler","bar"), {...layout("Logical error rate (must match)","code / p","LER","log"), barmode:"group"}, {displayModeBar:false});
+  $("q_tab").innerHTML = "<table><tr><th>code / p</th><th>decoder</th><th>LER</th><th>shots/s</th><th>p50 µs</th><th>p99 µs</th><th>BP converged</th></tr>" +
+    Q.map(r=>`<tr><td>${lab(r)}</td><td>${r.decoder}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${r.accept_rate==null?"-":fmt(100*r.accept_rate,1)+"%"}</td></tr>`).join("") + "</table>";
+}
+Object.keys(RUNS).forEach(t=>$("run").add(new Option(t,t)));
+$("run").onchange = ()=>{ $("d").innerHTML=""; render(); }; $("d").onchange = render;
+render();
+</script>
+</body>
+</html>

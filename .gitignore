@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.egg-info/
+.ipynb_checkpoints/
+models/
+*.safetensors
+*.pt
+.env
+*.env
+*.pem
+*.key
+.claude/

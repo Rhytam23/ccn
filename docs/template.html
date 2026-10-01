@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU-Accelerated AI-Enhanced QEC Decoder</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root { --bg:#0e1116; --card:#161b22; --fg:#e6edf3; --mut:#8b949e; --acc:#76b900; --line:#30363d; }
+  @media (prefers-color-scheme: light) { :root { --bg:#fff; --card:#f6f8fa; --fg:#1f2328; --mut:#59636e; --line:#d0d7de; } }
+  * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.55 system-ui,Segoe UI,sans-serif }
+  header { padding:40px 20px 24px; max-width:1100px; margin:auto }
+  h1 { margin:0 0 8px; font-size:30px } h2 { margin:34px 0 10px; font-size:21px; border-bottom:1px solid var(--line); padding-bottom:6px }
+  .sub { color:var(--mut); max-width:800px } main { max-width:1100px; margin:auto; padding:0 20px 60px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin:12px 0 }
+  .row { display:flex; gap:14px; flex-wrap:wrap } .row > * { flex:1 1 440px; min-width:0 }
+  select { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; margin-right:8px }
+  table { border-collapse:collapse; width:100%; font-size:13px } th,td { text-align:right; padding:5px 8px; border-bottom:1px solid var(--line) }
+  th:first-child,td:first-child { text-align:left } .note { color:var(--mut); font-size:13px }
+  .pill { display:inline-block; background:var(--acc); color:#10150a; border-radius:99px; padding:1px 10px; font-size:12px; font-weight:600 }
+  pre { background:var(--card); border:1px solid var(--line); padding:12px; border-radius:8px; overflow:auto; font-size:13px }
+  .warn { border-left:4px solid #d29922; padding:8px 12px; background:var(--card); border-radius:4px }
+</style>
+</head>
+<body>
+<header>
+  <span class="pill">NVIDIA / Open Hackathons</span>
+  <h1>GPU-accelerated, AI-enhanced QEC decoding</h1>
+  <p class="sub">A hybrid pipeline: a fast GPU pre-decoder clears the easy, local syndromes; only the hard residual reaches the exact global decoder
+  (MWPM for the surface code, BP+OSD for qLDPC). Every number below is measured by the benchmark harness in this repo.</p>
+  <div class="card"><b>Run:</b> <select id="run"></select><span id="meta" class="note"></span></div>
+</header>
+<main>
+  <div class="warn note" id="honesty"></div>
+
+  <h2>Surface code (circuit-level noise, Stim)</h2>
+  <div class="card">Distance <select id="d"></select> <span class="note">Latency table and curves update with the selection.</span></div>
+  <div class="row">
+    <div class="card"><div id="ler"></div></div>
+    <div class="card"><div id="thr"></div></div>
+  </div>
+  <div class="row">
+    <div class="card"><div id="spd"></div></div>
+    <div class="card"><div id="acc"></div></div>
+  </div>
+  <div class="card"><b>Single-shot latency (µs) &amp; throughput</b><div id="lat"></div></div>
+
+  <h2>qLDPC BP+OSD (bivariate-bicycle codes, code-capacity noise)</h2>
+  <div class="row">
+    <div class="card"><div id="q_thr"></div></div>
+    <div class="card"><div id="q_ler"></div></div>
+  </div>
+  <div class="card"><b>Details</b><div id="q_tab"></div></div>
+
+  <h2>Reproduce</h2>
+  <pre>git clone &lt;repo&gt; &amp;&amp; cd &lt;repo&gt;
+python -m venv .venv &amp;&amp; . .venv/bin/activate
+pip install -r requirements.txt &amp;&amp; pip install -e .
+python scripts/run_benchmarks.py --profile full --device auto --tag my-run
+python scripts/make_report.py</pre>
+  <p class="note">Or open <code>notebooks/01_run_benchmarks_colab.ipynb</code> in Google Colab (free T4 GPU).</p>
+</main>
+<script>
+const RUNS = /*__DATA__*/null;
+const $ = id => document.getElementById(id);
+const fmt = (x, k=0) => x==null ? "-" : Number(x).toLocaleString(undefined,{maximumFractionDigits:k});
+const colors = ["#8b949e","#d29922","#76b900","#58a6ff","#f778ba","#a371f7"];
+const layout = (t, xt, yt, ytype) => ({title:{text:t,font:{size:14}}, paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
+  font:{color:getComputedStyle(document.body).color}, xaxis:{title:xt, gridcolor:"#30363d55"}, yaxis:{title:yt, type:ytype, gridcolor:"#30363d55"},
+  margin:{l:60,r:10,t:40,b:50}, legend:{orientation:"h", y:-0.28}, height:340});
+function groupBy(rows, key){ const m={}; rows.forEach(r=>(m[r[key]] ||= []).push(r)); return m; }
+
+function render(){
+  const tag = $("run").value, run = RUNS[tag], m = run.meta || {};
+  $("meta").textContent = ` device=${m.device||"?"} gpu=${m.gpu||"none (CPU run)"} torch=${m.torch||"?"} cudaq-qec=${m.cudaq_qec||"?"}`;
+  $("honesty").innerHTML = m.gpu ? "GPU run: numbers measured on <b>"+m.gpu+"</b>." :
+    "<b>CPU-only run.</b> The GPU pre-decoder is running on CPU here, so it is <i>not</i> expected to beat PyMatching in this run. Re-run on a GPU (Colab) for the accelerated numbers.";
+  const S = run.surface || [];
+  const ds = [...new Set(S.map(r=>r.d))]; if(!$("d").options.length) ds.forEach(d=>$("d").add(new Option("d="+d, d)));
+  const d = +$("d").value || ds[0];
+  const rows = S.filter(r=>r.d===d), dec = groupBy(rows,"decoder");
+  const names = Object.keys(dec);
+  const traces = (key, mode="lines+markers") => names.map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r[key]), name:n, mode, marker:{color:colors[i%6]}, line:{color:colors[i%6]}}));
+  Plotly.newPlot("ler", traces("ler"), layout("Logical error rate vs physical p (d="+d+")","physical error rate p","LER","log"), {displayModeBar:false});
+  Plotly.newPlot("thr", traces("throughput_sps"), layout("Batched throughput","physical error rate p","shots / s","log"), {displayModeBar:false});
+  const base = Object.fromEntries((dec["pymatching (CPU)"]||[]).map(r=>[r.p,r.throughput_sps]));
+  const sp = names.filter(n=>n!=="pymatching (CPU)").map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r.throughput_sps/base[r.p]), name:n, type:"bar", marker:{color:colors[(i+1)%6]}}));
+  Plotly.newPlot("spd", sp, {...layout("Throughput speed-up vs PyMatching","physical error rate p","x faster"), barmode:"group"}, {displayModeBar:false});
+  const ac = names.filter(n=>n!=="pymatching (CPU)").map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r.accept_rate), name:n, type:"bar", marker:{color:colors[(i+1)%6]}}));
+  Plotly.newPlot("acc", ac, {...layout("Shots fully resolved on the fast path","physical error rate p","fraction"), barmode:"group"}, {displayModeBar:false});
+  $("lat").innerHTML = "<table><tr><th>decoder</th><th>p</th><th>LER</th><th>throughput/s</th><th>p50 µs</th><th>p95 µs</th><th>p99 µs</th><th>fast-path</th></tr>" +
+    rows.map(r=>`<tr><td>${r.decoder}</td><td>${r.p}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p95_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${fmt(100*r.accept_rate,1)}%</td></tr>`).join("") + "</table>";
+
+  const Q = run.qldpc || [], qd = groupBy(Q,"decoder"), qn = Object.keys(qd);
+  const lab = r => r.code+" p="+r.p;
+  const qtr = (key,type) => qn.map((n,i)=>({x:qd[n].map(lab), y:qd[n].map(r=>r[key]), name:n, type, marker:{color:colors[i%6]}}));
+  Plotly.newPlot("q_thr", qtr("throughput_sps","bar"), {...layout("BP+OSD throughput","code / p","shots / s","log"), barmode:"group"}, {displayModeBar:false});
+  Plotly.newPlot("q_ler", qtr("ler","bar"), {...layout("Logical error rate (must match)","code / p","LER","log"), barmode:"group"}, {displayModeBar:false});
+  $("q_tab").innerHTML = "<table><tr><th>code / p</th><th>decoder</th><th>LER</th><th>shots/s</th><th>p50 µs</th><th>p99 µs</th><th>BP converged</th></tr>" +
+    Q.map(r=>`<tr><td>${lab(r)}</td><td>${r.decoder}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${r.accept_rate==null?"-":fmt(100*r.accept_rate,1)+"%"}</td></tr>`).join("") + "</table>";
+}
+Object.keys(RUNS).forEach(t=>$("run").add(new Option(t,t)));
+$("run").onchange = ()=>{ $("d").innerHTML=""; render(); }; $("d").onchange = render;
+render();
+</script>
+</body>
+</html>

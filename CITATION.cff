@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "qechybrid: GPU-accelerated, AI-enhanced hybrid QEC decoding"
+version: 0.1.0
+license: MIT
+authors:
+  - name: "qechybrid contributors"
+references:
+  - type: software
+    title: "Stim"
+    url: "https://github.com/quantumlib/Stim"
+  - type: software
+    title: "PyMatching"
+    url: "https://github.com/oscarhiggott/PyMatching"
+  - type: software
+    title: "ldpc"
+    url: "https://github.com/quantumgizmos/ldpc"
+  - type: software
+    title: "NVIDIA Ising-Decoding"
+    url: "https://github.com/NVIDIA/Ising-Decoding"

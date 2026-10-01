@@ -1,0 +1,4 @@
+# Colab ships torch/numpy/pandas/matplotlib already; only add what is missing.
+stim
+pymatching
+ldpc

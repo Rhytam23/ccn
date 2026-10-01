@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qechybrid"
+version = "0.1.0"
+description = "GPU-accelerated, AI-gated hybrid QEC decoding pipeline (surface code + qLDPC BP+OSD)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+  "numpy", "scipy", "pandas", "stim", "pymatching", "ldpc", "torch",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "matplotlib", "nbformat"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

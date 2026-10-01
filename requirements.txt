@@ -1,0 +1,11 @@
+# Local (CPU) development. Install torch separately for your platform:
+#   CPU : pip install torch --index-url https://download.pytorch.org/whl/cpu
+numpy
+scipy
+pandas
+matplotlib
+stim
+pymatching
+ldpc
+pytest
+nbformat
