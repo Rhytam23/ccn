@@ -6,6 +6,6 @@ pandas
 matplotlib
 stim
 pymatching
-ldpc
+ldpc>=2.0
 pytest
 nbformat

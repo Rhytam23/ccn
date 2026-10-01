@@ -80,3 +80,20 @@ def test_local_predecoder_is_exact_enough_and_sparsifies():
     assert errs <= base * 1.3 + 8
     one = np.array([h.decode_one(td[i])[0] for i in range(200)])
     assert (one == h.decode_batch(td[:200])[:, 0]).all()  # single-shot path == batch path
+
+
+def test_ising_adapter_plumbing_if_repo_present():
+    """Runs only when NVIDIA/Ising-Decoding is cloned in third_party/ (random weights: plumbing only)."""
+    import os
+
+    import pytest
+
+    repo = os.path.join(os.path.dirname(__file__), "..", "third_party", "Ising-Decoding")
+    if not os.path.isdir(repo):
+        pytest.skip("NVIDIA/Ising-Decoding not cloned")
+    from qechybrid.ising_adapter import build_context, run_comparison
+
+    ctx = build_context(repo, distance=9, p=0.005, shots=300, weights=None, device="cpu")
+    rows = run_comparison(ctx, lat_shots=5, log=lambda *_: None)
+    assert [r["decoder"].split(" [")[0] for r in rows] == ["pymatching (CPU)", "NVIDIA Ising + pymatching", "ours: local pre-decoder + pymatching"]
+    assert rows[2]["ler"] < 0.2  # our pre-decoder + MWPM stays sane on NVIDIA's circuit

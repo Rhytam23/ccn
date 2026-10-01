@@ -115,7 +115,7 @@ def run_surface(d, p, cfg, device, log=print):
                 code="surface", d=d, rounds=d, p=p, decoder=name, device=device if mode in ("nn", "local") else "cpu",
                 shots=n, errors=errs, ler=ler, ler_lo=lo, ler_hi=hi,
                 throughput_sps=n / stats["t_total"], lat_p50_us=lat["p50"], lat_p95_us=lat["p95"], lat_p99_us=lat["p99"],
-                accept_rate=stats["accept_rate"], syndrome_weight_kept=stats["syndrome_weight_kept"], extra=f"gate_train_s={train_s:.1f};thr_logit={gate.threshold:.3f}",
+                accept_rate=stats["accept_rate"], syndrome_weight_kept=stats["syndrome_weight_kept"], t_stage1_s=stats["t_gate"], t_global_s=stats["t_match"], extra=f"gate_train_s={train_s:.1f};thr_logit={gate.threshold:.3f}",
             )
         )
         log(f"  surface d={d} p={p} {name:38s} LER={ler:.2e} {n / stats['t_total']:,.0f} shots/s accept={stats['accept_rate']:.3f}")

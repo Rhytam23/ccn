@@ -10,13 +10,19 @@
    git add results docs && git commit -m "Add Colab GPU results" && git push
    ```
 
+## NVIDIA Ising head-to-head (notebook 03)
+1. On Hugging Face, open `nvidia/ising_decoder_surface_code_1_fast`, accept the terms, create a **read** token.
+2. In Colab, add it as a secret named `HF_TOKEN` (key icon, notebook access on). Never paste it into a cell or commit it.
+3. Run notebook 03. NVIDIA validates the model for d >= 9, so the default distances are 9 and 13.
+4. Without the token, `scripts/run_ising_bench.py` still runs with random weights: useful only to check plumbing and timing (rows are labelled and the LER is meaningless).
+
 ## Troubleshooting
 | Symptom | Fix |
 |---|---|
 | `CUDA: False` | Runtime type is CPU; switch to GPU and re-run all |
 | Out of memory in BP | lower `chunk` in `BatchedMinSumBP` (default 2048) or use the [[72,12,6]] code |
 | Out of memory for d=13 gate training | reduce `train` in `PROFILES["full"]` |
-| `torch.sparse` error in `local_predecoder.py` | on CUDA the adjacency is a sparse CSR tensor; if your torch version lacks CSR x dense, change `_sp` to return a dense `torch.tensor(A.toarray())` (fine for d<=13) |
+| Out of memory in `local_predecoder.py` at very large d | on CUDA the adjacency matrices are dense (N x N floats, ~5 MB at d=13); only d>30 gets large |
 | `cudaq_qec` import fails | `pip install cudaq-qec`, restart runtime; otherwise the harness skips that backend and says so in `meta.json` |
 | Session disconnects | results are written per configuration to `results/<tag>/*.csv`; re-run with `--only surface` / `--only qldpc` |
 | Free quota exhausted | use Kaggle Notebooks (T4/P100, ~30 GPU h/week) with the same commands |

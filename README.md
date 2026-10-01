@@ -26,7 +26,7 @@ Stim syndromes ──► [GPU] pre-decoder ──► empty residual? ──yes�
 | **Batched min-sum BP in PyTorch** (CUDA/CPU) with BP+OSD fallback for non-converged shots | `bp_gpu.py`, `decoders.py` | tested on CPU (matches ldpc LER); CUDA path to confirm on Colab |
 | Bivariate-bicycle qLDPC codes [[72,12,6]], [[144,12,12]], exact logical-failure check over GF(2) | `codes.py`, `gf2.py` | tested |
 | Optional NVIDIA **CUDA-Q QEC** `nv-qldpc-decoder` backend | `cudaq_qec_adapter.py` | **unverified** (written from public docs; needs Colab GPU) |
-| Reproduction of NVIDIA's **Ising** 3D-CNN pre-decoder reference | `notebooks/03_ising_reproduce.ipynb` | follows NVIDIA's README; **unverified** |
+| **Head-to-head with NVIDIA's Ising 3D-CNN pre-decoder** on identical shots (NVIDIA's circuit + noise model): PyMatching vs Ising+PyMatching vs ours | `ising_adapter.py`, `scripts/run_ising_bench.py`, `notebooks/03_ising_head_to_head.ipynb` | wiring follows NVIDIA's cookbook and is **verified locally with random weights** (plumbing/timing only); **trained-weights numbers pending**: weights are gated on Hugging Face and need your own token |
 | Benchmark harness (LER with Wilson CIs, throughput, p50/p95/p99 single-shot latency) | `bench.py`, `scripts/run_benchmarks.py` | tested |
 | Interactive results website (GitHub Pages ready) | `docs/index.html` (built by `scripts/make_report.py`) | working |
 
@@ -56,24 +56,26 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: create
 2. Open `notebooks/01_run_benchmarks_colab.ipynb` in Colab (set the runtime to a T4 GPU, set `GITHUB_REPO` in the first cell) and run all.
 3. Download the zip, copy `results/colab-gpu/` into the repo, run `python scripts/make_report.py`, commit, and enable **GitHub Pages** (Settings > Pages > `main` / `docs`).
    The same page then shows CPU and GPU runs side by side via the run selector.
-4. Optional: `02_cudaq_qec_bposd.ipynb` (NVIDIA GPU BP+OSD) and `03_ising_reproduce.ipynb` (NVIDIA Ising reference numbers).
+4. Optional: `02_cudaq_qec_bposd.ipynb` (NVIDIA GPU BP+OSD) and `03_ising_head_to_head.ipynb` (real NVIDIA Ising model vs ours; needs a free Hugging Face account, acceptance of the model terms, and a read token stored as the Colab secret `HF_TOKEN`).
 
-## Honest results so far (local CPU, quick profile)
+## Honest results so far (local CPU, quick profile; GPU runs pending)
 
-All logical error rates match the plain decoders within statistical error (see CIs in the CSVs). On a **CPU** the GPU-style pre-decoder and
-batched BP are *slower* than PyMatching and the C++ `ldpc` library respectively: that is expected, since they are written for wide
-data-parallel hardware. The claim to test on the GPU is:
+Measured (`results/local-cpu/`, 20k shots per point, circuit-level noise, Stim):
 
-* **Surface code:** local pre-decoding removes ~60-80 % of syndrome weight (measured: `syndrome_weight_kept` = 0.2-0.4) and fully resolves
-  up to ~50 % of shots at d=5, p=0.002. PyMatching on the residual ran ~2.4x faster than on the raw syndromes at d=13
-  (3.48 s -> 1.43 s per 100k shots in a CPU scratch experiment). With the pre-decode step on a GPU this should translate into end-to-end
-  speed-up that grows with distance; NVIDIA reports ~2.5x for their CNN at d=13, p=0.003.
-* **qLDPC:** batched GPU BP resolves the converged shots (~98 % at p=0.03 on [[72,12,6]]) in parallel; only the rest need OSD.
+| d | p | PyMatching time on residual vs raw syndrome | syndrome weight left | shots fully resolved by stage 1 | logical errors (ours / PyMatching) |
+|---|---|---|---|---|---|
+| 5 | 0.002 | **2.2x faster** | 37 % | 49 % | 24 / 23 |
+| 5 | 0.004 | 1.35x faster | 50 % | 21 % | 154 / 148 |
+| 7 | 0.002 | 1.65x faster | 37 % | 18 % | 5 / 2 (low counts) |
+| 7 | 0.004 | 1.39x faster | 54 % | 2 % | 98 / 85 |
 
-The MLP gate is an honest negative result for larger distances: a global classifier accepts few shots at d=7 and above, which is why the
-local pre-decoder (and NVIDIA's local 3D-CNN) is the right design. It is kept as an ablation.
-
-Do not quote GPU speed-ups until `results/colab-gpu/` exists; the site labels every run with its hardware.
+* The stage-2 (global decoder) speed-up is **hardware independent** and real: pre-decoding hands MWPM a much sparser problem. LER stays within a few percent at d=5; the
+  d=7, p=0.004 point shows about 15 % more logical errors (+13 events), so treat the pairing rule as a trade-off, not a free lunch, and check the confidence intervals in the CSV.
+* On a **CPU**, the end-to-end pipeline is *slower* than PyMatching alone because stage 1 (run here in NumPy/SciPy on CPU) costs more than it saves; likewise batched BP is slower than the C++ `ldpc`.
+  The end-to-end claim is that stage 1 becomes nearly free on a GPU; **that is untested until `results/colab-gpu/` exists**, and the website labels every run with its hardware.
+* NVIDIA's Ising adapter is wired up and checked for plumbing (random weights); the trained-model comparison needs your Hugging Face token (see GPU runbook).
+* The MLP gate is an honest negative result beyond d=5 (it resolves almost no shots at d=7), which is why a local pre-decoder is the primary design. It is kept as an ablation.
+* qLDPC: batched BP converges on about 98 % of shots at p=0.03 on [[72,12,6]] (code-capacity noise), leaving only the rest for OSD.
 
 ## Tests
 

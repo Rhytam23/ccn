@@ -51,18 +51,12 @@ nb("02_cudaq_qec_bposd.ipynb", [
     ("code", "!python scripts/run_benchmarks.py --profile full --device cuda --tag colab-qldpc --only qldpc"),
 ])
 
-nb("03_ising_reproduce.ipynb", [
-    ("md", "# 03 - Reproduce NVIDIA's Ising pre-decoder baseline\nDownloads NVIDIA's open weights (NVIDIA Open Model License; do not redistribute them - we only download at run time) and runs **their** inference pipeline (3D-CNN pre-decoder + PyMatching). This gives the reference numbers our own pre-decoder is compared against. Follow the README of https://github.com/NVIDIA/Ising-Decoding if a command below has changed."),
-    ("code", '''!git clone --depth 1 https://github.com/NVIDIA/Ising-Decoding.git /content/ising
-%cd /content/ising
-!pip -q install -r code/requirements_public_inference.txt huggingface_hub
-!hf download nvidia/Ising-Decoder-SurfaceCode-1-Fast --local-dir models/
-!ls models'''),
-    ("code", '''import glob, os
-ckpt = glob.glob("/content/ising/models/*fast*fp16.safetensors")[0]
-os.environ["PREDECODER_SAFETENSORS_CHECKPOINT"] = ckpt
-os.environ["WORKFLOW"] = "inference"
-!bash code/scripts/local_run.sh'''),
-    ("md", "Copy the reported LER / latency numbers into `results/ising-reference/notes.md` and cite them next to our results."),
+nb("03_ising_head_to_head.ipynb", [
+    ("md", "# 03 - Head-to-head with NVIDIA's Ising pre-decoder\nRuns NVIDIA's real 3D-CNN pre-decoder + PyMatching, plain PyMatching, and **our** local pre-decoder on the *same* shots (NVIDIA's own circuit and noise model).\n\n**One-time access step:** the Ising weights are gated on Hugging Face. Open https://huggingface.co/nvidia/ising_decoder_surface_code_1_fast , accept the terms, create a *read* token, and add it in Colab (key icon, left bar) as a secret named `HF_TOKEN` with notebook access ON. The token stays in your Colab secrets; never paste it into a cell or commit it. The weights are under the NVIDIA Open Model License and are downloaded at run time only."),
+    ("code", SETUP),
+    ("code", 'import os, subprocess\nfrom google.colab import userdata\nos.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")  # read from Colab secrets, never printed\nsubprocess.run(["git", "clone", "--depth", "1", "https://github.com/NVIDIA/Ising-Decoding.git", "third_party/Ising-Decoding"], check=True)\n!pip -q install safetensors omegaconf hydra-core huggingface_hub beliefmatching'),
+    ("code", "!python scripts/run_ising_bench.py --repo third_party/Ising-Decoding --download --device cuda --distances 9 13 --ps 0.003 0.005 --shots 20000 --tag colab-ising"),
+    ("code", "!python scripts/make_report.py\n!zip -qr results_ising.zip results/colab-ising docs/index.html\nfrom google.colab import files; files.download('results_ising.zip')"),
+    ("md", "Interpretation: compare LER (must match PyMatching), stage 1 vs stage 2 seconds, and total shots/s. Batch-1 latency is expected to favour plain PyMatching for NVIDIA's model too (see NVIDIA's own caveat in their cookbook)."),
 ])
 print("notebooks written to", OUT)

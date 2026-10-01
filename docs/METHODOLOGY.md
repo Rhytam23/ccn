@@ -32,5 +32,6 @@ Train / validation / test use different seeds (1 / 2 / 3). The learned gate is t
 ## Known limitations
 * CPU PyMatching is extremely fast at small distance; expect GPU benefit to appear at larger d and larger batches.
 * Code-capacity qLDPC results do not transfer to circuit-level noise.
-* The CUDA-Q QEC adapter and the Ising reproduction notebook have not been verified in this repository's CI.
+* The CUDA-Q QEC adapter has not been verified against a real install. The Ising adapter is verified for plumbing with random weights only; trained-weight results need a user-supplied Hugging Face token.
+* The Ising comparison uses NVIDIA's circuit (25-parameter noise, boundary detectors, basis X), which differs from the plain Stim circuit used elsewhere, so those rows are kept in a separate table and never mixed.
 * Dense BP memory scales as B x m x n.

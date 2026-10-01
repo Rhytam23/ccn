@@ -59,18 +59,17 @@ class LocalPreDecoder:
         self.b_obs = torch.as_tensor(bnd_obs * has_b, dtype=torch.float32, device=device)
 
     def _sp(self, i, j, N):
-        """CPU: scipy CSR (fast). CUDA: torch sparse CSR."""
+        """CPU: scipy CSR (fast). CUDA: dense float matrix (N <= a few thousand, so a plain
+        GEMM is robust and fast; avoids relying on torch sparse-CSR kernels)."""
         A = sp.csr_matrix((np.ones(len(i), np.float32), (i, j)), shape=(N, N))
         if str(self.device).startswith("cuda"):
-            return torch.sparse_csr_tensor(
-                torch.as_tensor(A.indptr, dtype=torch.int64), torch.as_tensor(A.indices, dtype=torch.int64),
-                torch.as_tensor(A.data), size=(N, N)).to(self.device)
+            return torch.as_tensor(A.toarray(), device=self.device)
         return A
 
-    def _mm(self, A, X):  # X: (B, N) -> X @ A^T (A symmetric)
+    def _mm(self, A, X):  # X: (B, N) -> X @ A (all adjacency matrices are symmetric)
         if sp.issparse(A):
             return torch.from_numpy(np.ascontiguousarray((A @ X.cpu().numpy().T).T))
-        return (A @ X.T.contiguous()).T
+        return X @ A
 
     @torch.no_grad()
     def predecode(self, dets):

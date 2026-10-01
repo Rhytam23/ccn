@@ -54,7 +54,6 @@ Two instantiations share the same idea (cheap parallel stage first, exact stage 
 
 ## Extension points
 
-* **NVIDIA Ising CNN as Stage 1:** implement an object with `predecode(dets) -> (residual, flip)` (same contract as `LocalPreDecoder`) and pass it as `local=`.
-  The Ising model uses its own input layout (4 channels x T x D x D), so the adapter must map Stim detectors to it; see NVIDIA/Ising-Decoding `code/qec`.
+* **NVIDIA Ising CNN as Stage 1:** implemented in `ising_adapter.py`. It wraps NVIDIA's `PreDecoderMemoryEvalModule` (flat detector bits in, `[logical flip | residual detectors]` out) and runs it next to plain PyMatching and our pre-decoder on the same shots. NVIDIA's repository is cloned at run time (Apache-2.0, not vendored); the weights are gated on Hugging Face and loaded with the user's own token.
 * **CUDA-Q QEC OSD:** pass `osd_backend=CudaqQecBpOsd(H)` to `HybridBpOsd` to use NVIDIA's GPU BP+OSD for the fallback shots.
 * **Other codes:** any Stim circuit works for the surface-code path; any binary parity-check matrix works for the BP path.

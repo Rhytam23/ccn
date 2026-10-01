@@ -1,22 +1,22 @@
 device=cpu gpu=None tag=local-cpu
-  surface d=5 p=0.002 pymatching (CPU)                       LER=1.15e-03 408,251 shots/s accept=0.000
-  surface d=5 p=0.002 zero-syndrome shortcut + pymatching    LER=1.15e-03 395,305 shots/s accept=0.182
-  surface d=5 p=0.002 GPU local pre-decoder + pymatching     LER=1.20e-03 133,592 shots/s accept=0.492
-  surface d=5 p=0.002 AI gate (MLP, strict) + pymatching     LER=1.20e-03 260,187 shots/s accept=0.105
-  surface d=5 p=0.004 pymatching (CPU)                       LER=7.40e-03 203,461 shots/s accept=0.000
-  surface d=5 p=0.004 zero-syndrome shortcut + pymatching    LER=7.40e-03 189,949 shots/s accept=0.031
-  surface d=5 p=0.004 GPU local pre-decoder + pymatching     LER=7.70e-03 105,645 shots/s accept=0.209
-  surface d=5 p=0.004 AI gate (MLP, strict) + pymatching     LER=7.85e-03 149,360 shots/s accept=0.075
-  surface d=7 p=0.002 pymatching (CPU)                       LER=1.00e-04 276,037 shots/s accept=0.000
-  surface d=7 p=0.002 zero-syndrome shortcut + pymatching    LER=1.00e-04 265,187 shots/s accept=0.007
-  surface d=7 p=0.002 GPU local pre-decoder + pymatching     LER=2.50e-04 81,221 shots/s accept=0.177
-  surface d=7 p=0.002 AI gate (MLP, strict) + pymatching     LER=1.00e-04 181,896 shots/s accept=0.000
-  surface d=7 p=0.004 pymatching (CPU)                       LER=4.25e-03 136,020 shots/s accept=0.000
-  surface d=7 p=0.004 zero-syndrome shortcut + pymatching    LER=4.25e-03 133,399 shots/s accept=0.000
-  surface d=7 p=0.004 GPU local pre-decoder + pymatching     LER=4.90e-03 62,287 shots/s accept=0.017
-  surface d=7 p=0.004 AI gate (MLP, strict) + pymatching     LER=4.45e-03 103,533 shots/s accept=0.011
-  BB[[72,12,6]] p=0.02 ldpc BP+OSD (CPU)                      LER=1.00e-02 97,658 shots/s
-  BB[[72,12,6]] p=0.02 GPU min-sum BP + OSD fallback          LER=1.00e-02 641 shots/s
-  BB[[72,12,6]] p=0.04 ldpc BP+OSD (CPU)                      LER=8.80e-02 50,175 shots/s
-  BB[[72,12,6]] p=0.04 GPU min-sum BP + OSD fallback          LER=8.80e-02 633 shots/s
+  surface d=5 p=0.002 pymatching (CPU)                       LER=1.15e-03 686,375 shots/s accept=0.000
+  surface d=5 p=0.002 zero-syndrome shortcut + pymatching    LER=1.15e-03 761,580 shots/s accept=0.182
+  surface d=5 p=0.002 GPU local pre-decoder + pymatching     LER=1.20e-03 165,737 shots/s accept=0.492
+  surface d=5 p=0.002 AI gate (MLP, strict) + pymatching     LER=1.15e-03 310,090 shots/s accept=0.139
+  surface d=5 p=0.004 pymatching (CPU)                       LER=7.40e-03 422,100 shots/s accept=0.000
+  surface d=5 p=0.004 zero-syndrome shortcut + pymatching    LER=7.40e-03 422,150 shots/s accept=0.031
+  surface d=5 p=0.004 GPU local pre-decoder + pymatching     LER=7.70e-03 152,038 shots/s accept=0.209
+  surface d=5 p=0.004 AI gate (MLP, strict) + pymatching     LER=7.85e-03 215,867 shots/s accept=0.075
+  surface d=7 p=0.002 pymatching (CPU)                       LER=1.00e-04 273,729 shots/s accept=0.000
+  surface d=7 p=0.002 zero-syndrome shortcut + pymatching    LER=1.00e-04 265,288 shots/s accept=0.007
+  surface d=7 p=0.002 GPU local pre-decoder + pymatching     LER=2.50e-04 63,584 shots/s accept=0.177
+  surface d=7 p=0.002 AI gate (MLP, strict) + pymatching     LER=1.00e-04 157,649 shots/s accept=0.000
+  surface d=7 p=0.004 pymatching (CPU)                       LER=4.25e-03 126,951 shots/s accept=0.000
+  surface d=7 p=0.004 zero-syndrome shortcut + pymatching    LER=4.25e-03 118,507 shots/s accept=0.000
+  surface d=7 p=0.004 GPU local pre-decoder + pymatching     LER=4.90e-03 51,352 shots/s accept=0.017
+  surface d=7 p=0.004 AI gate (MLP, strict) + pymatching     LER=4.45e-03 100,840 shots/s accept=0.011
+  BB[[72,12,6]] p=0.02 ldpc BP+OSD (CPU)                      LER=1.00e-02 101,531 shots/s
+  BB[[72,12,6]] p=0.02 GPU min-sum BP + OSD fallback          LER=1.00e-02 443 shots/s
+  BB[[72,12,6]] p=0.04 ldpc BP+OSD (CPU)                      LER=8.80e-02 44,182 shots/s
+  BB[[72,12,6]] p=0.04 GPU min-sum BP + OSD fallback          LER=8.80e-02 442 shots/s
 wrote results\local-cpu
