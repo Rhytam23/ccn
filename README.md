@@ -65,7 +65,23 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: create
   At some points it adds logical errors (d=7, p=0.002: 3.75e-4 vs 2.5e-4).
 * **qLDPC:** the first GPU BP implementation (dense tensors) was 5-15x *slower* than the C++ `ldpc` library.
 
-### What changed since, and what it means
+### Colab T4, run 2 (current code, `--profile quick`; data in `results/colab-gpu/`)
+Surface code, 20,000 shots per point, GPU local pre-decoder + PyMatching vs PyMatching alone (same Colab session, 2 vCPU):
+
+| d | p | end-to-end | stage 1 (GPU) | PyMatching on residual vs raw | logical errors (ours / PyMatching) |
+|---|---|---|---|---|---|
+| 5 | 0.002 | 1.22x | 0.01 s | 0.02 s vs 0.04 s | 27 / 27 |
+| 5 | 0.004 | 1.24x | 0.01 s | 0.03 s vs 0.05 s | 158 / 155 |
+| 7 | 0.002 | 1.14x | 0.02 s | 0.04 s vs 0.08 s | 5 / 5 |
+| 7 | 0.004 | 1.62x | 0.03 s | 0.14 s vs 0.28 s | 80 / 71 |
+
+* **First real GPU result:** a modest 1.1-1.6x end-to-end speed-up, with logical error counts equal within statistical noise except d=7, p=0.004 (80 vs 71). This is the quick profile and small distances;
+  the `full` profile (d up to 13, 200k shots) has not been run on the new code.
+* **qLDPC (1,000 shots, quick profile):** the rewritten GPU BP is now about 20k shots/s vs 84k shots/s for the C++ `ldpc` on [[72,12,6]], p=0.02 (it was 9k in run 1), identical LER. 1,000 shots is too small to
+  load a GPU, so this is not yet a fair comparison: rerun with `PROFILE = "full"` (20,000 shots) before drawing conclusions. No qLDPC speed-up has been shown.
+* CUDA-Q QEC was not installed and the Ising comparison has not run (no Hugging Face token yet).
+
+### What changed since run 1, and what it means
 * **BP rewritten** (edge lists + dropping converged shots from the working batch): identical output to the dense version (unit-tested) and 20-160x faster on the same CPU
   (4000 shots: 9.8 s -> 0.24 s on [[72,12,6]], 40.9 s -> 0.25 s on [[144,12,12]], p=0.02). **Not yet re-measured on a GPU against `ldpc`: rerun notebook 01.**
 * **The local surface-code pre-decoder is a weak, approximate pre-decoder:** it clears 40-60 % of syndrome weight, which makes PyMatching on the residual 1.4-2x faster, but it costs
@@ -73,7 +89,7 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: create
 * **The comparison that matters** is NVIDIA's trained Ising CNN vs this baseline vs PyMatching on identical shots (`notebooks/03_ising_head_to_head.ipynb`, needs your Hugging Face token). It has not been run with trained weights.
 * The MLP gate is a negative result beyond d=5 and is kept only as an ablation.
 
-Do not quote a GPU speed-up for any component until a `results/colab-gpu*` run with CSV + `meta.json` shows it.
+Quote only what a `results/colab-gpu*` run with CSV + `meta.json` shows, with its hardware, profile and logical error counts.
 
 ## Tests
 
