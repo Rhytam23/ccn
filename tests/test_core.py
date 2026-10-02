@@ -97,3 +97,15 @@ def test_ising_adapter_plumbing_if_repo_present():
     rows = run_comparison(ctx, lat_shots=5, log=lambda *_: None)
     assert [r["decoder"].split(" [")[0] for r in rows] == ["pymatching (CPU)", "NVIDIA Ising + pymatching", "ours: local pre-decoder + pymatching"]
     assert rows[2]["ler"] < 0.2  # our pre-decoder + MWPM stays sane on NVIDIA's circuit
+
+
+def test_edge_list_bp_matches_dense_reference():
+    from qechybrid.bp_gpu import BatchedMinSumBP, DenseMinSumBP
+
+    c = bb_72_12_6()
+    for p in (0.02, 0.05):
+        _, s = c.sample(300, p, seed=11)
+        pri = np.full(c.n, p)
+        en, cn = BatchedMinSumBP(c.hz, pri).decode(s)
+        eo, co = DenseMinSumBP(c.hz, pri, chunk=300).decode(s)
+        assert (cn == co).all() and (en[cn] == eo[co]).all()
