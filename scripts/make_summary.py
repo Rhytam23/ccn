@@ -104,7 +104,7 @@ if has_new_rules:
         f"Caveats: batch throughput only ({lat_text}); "
         f"only d=5 and d=7 with {shots_s:,} shots per point, so error counts are small (a difference of a few errors is within noise); "
         f"the qLDPC rows use only {shots_q:,} shots, too few to load a GPU, so the GPU BP looks slow here: the 20,000-shot `full` run (`results/colab-gpu/`) is the fair qLDPC comparison. "
-        "The `safe` rule is the lossless one; the `fast` rule trades some logical errors for throughput. Ratios are relative to CPU baselines on the same Colab machine.\n"
+        "The `safe` rule showed no extra logical errors in these runs; the `fast` rule trades some logical errors for throughput. Ratios are relative to CPU baselines on the same Colab machine.\n"
     )
 else:
     surf_title = "GPU local pre-decoder (first, aggressive radius-1 rule) + PyMatching vs PyMatching alone"

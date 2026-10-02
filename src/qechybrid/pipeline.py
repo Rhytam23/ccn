@@ -1,4 +1,4 @@
-"""Hybrid surface-code pipeline: fast-path pre-decoder -> exact global decoder (MWPM) for the rest."""
+"""Hybrid surface-code pipeline: fast-path pre-decoder -> global decoder (MWPM) for the rest."""
 from __future__ import annotations
 
 import numpy as np

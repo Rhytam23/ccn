@@ -30,7 +30,7 @@
 | 7 | 0.004 | safe r=2 | 106,940 | 123,290 | **1.15x** | 1.21x | 72 / 71 | 3.60e-03 [2.9e-03, 4.5e-03] | 3.55e-03 [2.8e-03, 4.5e-03] | 83 % |
 | 7 | 0.004 | fast r=1 | 106,940 | 158,455 | **1.48x** | 1.57x | 80 / 71 | 4.00e-03 [3.2e-03, 5.0e-03] | 3.55e-03 [2.8e-03, 4.5e-03] | 53 % |
 
-Caveats: batch throughput only (single-shot p50 latency was 630-881 µs on the GPU vs 18-38 µs for PyMatching, and at 256-shot micro-batches the GPU pipeline was slower at 6 of 8 rows (faster at 2)); only d=5 and d=7 with 20,000 shots per point, so error counts are small (a difference of a few errors is within noise); the qLDPC rows use only 1,000 shots, too few to load a GPU, so the GPU BP looks slow here: the 20,000-shot `full` run (`results/colab-gpu/`) is the fair qLDPC comparison. The `safe` rule is the lossless one; the `fast` rule trades some logical errors for throughput. Ratios are relative to CPU baselines on the same Colab machine.
+Caveats: batch throughput only (single-shot p50 latency was 630-881 µs on the GPU vs 18-38 µs for PyMatching, and at 256-shot micro-batches the GPU pipeline was slower at 6 of 8 rows (faster at 2)); only d=5 and d=7 with 20,000 shots per point, so error counts are small (a difference of a few errors is within noise); the qLDPC rows use only 1,000 shots, too few to load a GPU, so the GPU BP looks slow here: the 20,000-shot `full` run (`results/colab-gpu/`) is the fair qLDPC comparison. The `safe` rule showed no extra logical errors in these runs; the `fast` rule trades some logical errors for throughput. Ratios are relative to CPU baselines on the same Colab machine.
 
 ## Environment (from `results/colab-gpu-quick/meta.json`)
 

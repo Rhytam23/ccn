@@ -7,7 +7,7 @@ built around NVIDIA's trained Ising model. It reports where the GPU wins, where 
 
 ## Pipelines
 
-Surface code (circuit-level noise, Stim). A pre-decoder removes the easy, local part of the syndrome; the exact decoder handles what is left:
+Surface code (circuit-level noise, Stim). A pre-decoder removes the easy, local part of the syndrome; a global decoder handles what is left:
 
 ```
 syndrome ──► pre-decoder (GPU) ──► residual syndrome ──► PyMatching (CPU, MWPM) ──► logical flip
@@ -15,18 +15,22 @@ syndrome ──► pre-decoder (GPU) ──► residual syndrome ──► PyMat
               NVIDIA Ising CNN
 ```
 
-qLDPC codes (bivariate-bicycle codes, code-capacity noise). A batched GPU decoder handles the shots it can; the rest go to OSD:
+qLDPC codes (bivariate-bicycle codes, code-capacity noise). **Measured path:** batched BP on the GPU, with a CPU OSD fallback for the shots BP cannot resolve:
 
 ```
 syndrome ──► batched min-sum BP (GPU) ──► converged? ──yes──► estimate
                                            │ no
-                                           └──► BP+OSD on those shots only (CPU `ldpc`; CUDA-Q QEC backend unverified)
+                                           └──► those shots are copied to the CPU and decoded by `ldpc` BP+OSD
 ```
+
+**How the fallback works.** BP runs on the GPU for every shot in the batch. A shot is *converged* when BP's estimate reproduces its syndrome; converged shots are accepted as they are. The remaining shots are copied to the CPU and decoded from scratch by the C++ `ldpc` BP+OSD decoder (it repeats BP and then applies OSD), one shot at a time. OSD itself is **not** on the GPU in this implementation, and the time spent in the CPU fallback is included in every reported throughput. The fraction of shots BP resolved on its own is recorded as `accept_rate` ("BP converged") in the qLDPC CSVs.
+
+**Unverified alternative (never run here):** replacing that CPU fallback with NVIDIA's closed-source CUDA-Q QEC `nv-qldpc-decoder` on the GPU (`cudaq_qec_adapter.py`). `cudaq-qec` was not installed in any of our runs, so no result in this repository uses it.
 
 **Experimental full pipeline** (results pending): the same two ideas combined on the surface code,
 
 ```
-syndrome ──► NVIDIA Ising (GPU) ──► residual syndrome ──► batched BP (GPU) ──► [OSD fallback, CPU] ──► logical flip XOR Ising's partial flip
+syndrome ──► NVIDIA Ising (GPU) ──► residual syndrome ──► batched BP (GPU) ──► CPU `ldpc` BP+OSD on non-converged shots ──► logical flip XOR Ising's partial flip
 ```
 
 *Why BP is valid on the surface code here:* Stim turns the noisy circuit into a **detector error model (DEM)**, i.e. a binary parity-check matrix **H** (rows = detectors, columns = fault mechanisms)
@@ -40,7 +44,8 @@ PyMatching stays the main surface-code baseline because it is the fastest practi
 * **Throughput ratio** = GPU-pipeline shots/s ÷ CPU-baseline shots/s on the same shots in the same session. **Above 1: the GPU pipeline is faster. Below 1: it is slower.** It is not a latency.
 * **Latency ratio** (where quoted) = CPU latency ÷ GPU latency for the same batch size.
 * **End-to-end** = pre-decoder + global decoder, transfers included, GPU-synchronised.
-* **Logical errors (ours / baseline)** are counts on the same shots; identical counts are evidence of similar decoding quality, not a proof. Wilson 95 % intervals are in the CSVs and in [docs/RESULTS.md](docs/RESULTS.md).
+* **Logical errors (ours / baseline)** are counts on the same shots. Equal counts mean both decoders made the same number of mistakes on those shots; they do not prove the decoders are equivalent. Wilson 95 % intervals are in the CSVs and in [docs/RESULTS.md](docs/RESULTS.md).
+* **What `x` means:** a number written like `1.58x` is a throughput ratio as defined above (the `x` is only a unit symbol); `0.98x` means the GPU pipeline was slightly slower. Ranges such as `0.98-1.58` in the history are the same ratio without the symbol.
 
 ## Glossary
 
@@ -84,8 +89,8 @@ Confidence intervals, surface-code tables and the full environment record: [docs
 |---|---|
 | Batched GPU BP + OSD fallback (qLDPC) | **Measured on a T4** (full profile, 20k shots/point): see the table above |
 | Local surface-code pre-decoder, first aggressive radius-1 rule | **Measured on a T4** (full profile, 200k shots): throughput ratio 0.62x-1.19x and extra logical errors at some points |
-| Local pre-decoder, lossless radius-2 rule and fast radius-1 rule with the fp16 stage 1 | **Measured on a T4, quick profile only** (d=5 and 7, 20k shots) |
-| Learned MLP gate | **Measured on a T4**: negative result (resolves at most ~2 % of shots at d>=7); kept as an ablation |
+| Local pre-decoder: `safe` radius-2 rule and `fast` radius-1 rule, with the fp16 stage 1 | **Measured on a T4, quick profile only** (d=5 and 7, 20k shots) |
+| Learned MLP gate | **Measured on a T4**: resolved at most ~2 % of shots at d>=7, so it was not useful there; kept as an ablation |
 | NVIDIA Ising trained model | **One trained-weight T4 case** (d=9, p=0.003); its timing was invalid (compile warm-up inside the timed region); later runs produced no results |
 | CUDA-Q QEC `nv-qldpc-decoder` | **Not verified**: `cudaq-qec` was not installed in any run (the decoder is a closed-source library, see the [CUDA-Q QEC docs](https://nvidia.github.io/cudaq-qec/)) |
 | Full pipeline: Ising (GPU) -> GPU BP+OSD vs CPU baselines | **Not yet measured**: plumbing checked on CPU with random weights only |
@@ -101,13 +106,13 @@ around NVIDIA's Ising pre-decoder, with explicit throughput, latency and logical
 
 **Ours:**
 * a batched, edge-list **GPU belief-propagation decoder** that drops converged shots from the working batch (unit-tested to match a dense reference bit for bit; equal logical-error counts to `ldpc` on a T4),
-* a **local GPU pre-decoder for the surface code** with a measured accuracy/throughput dial (`radius=2` lossless in our tests, `radius=1` faster but lossy); in the one measured case (d=9, p=0.003, NVIDIA's circuit) it leaves substantially more syndrome weight than the Ising model (48 % vs 2.9 %),
+* a **local GPU pre-decoder for the surface code** with a measured accuracy/throughput dial (`radius=2` showed no extra logical errors in our tests, `radius=1` is faster but adds errors at some points); in the one measured case (d=9, p=0.003, NVIDIA's circuit) it leaves substantially more syndrome weight than the Ising model (48 % vs 2.9 %),
 * the **benchmark harness** (same shots, same session, Wilson intervals, stage timings, single-shot and 256-shot micro-batch latency) and the **head-to-head wiring around NVIDIA's pipeline**,
 * the reproducible Colab notebook and results site.
 
 **What we claim (and only this):**
 1. GPU BP gives equal logical-error counts to `ldpc` on the same shots and a GPU/CPU batch-throughput ratio of 0.98x-1.58x on a T4 (qLDPC, code-capacity noise; best case [[144,12,12]], p=0.02).
-2. On a T4 (run 3, quick profile, d=5 and 7, 20k shots) the lossless `radius=2` rule has a throughput ratio of 1.08x-1.32x with the same logical-error counts as PyMatching in that run; the fast `radius=1` rule reaches 2.53x (d=7, p=0.002) with 80 vs 71 errors at d=7, p=0.004.
+2. On a T4 (run 3, quick profile, d=5 and 7, 20k shots) the `safe` radius-2 rule has a throughput ratio of 1.08x-1.32x with the same logical-error counts as PyMatching in that run; the fast `radius=1` rule reaches 2.53x (d=7, p=0.002) with 80 vs 71 errors at d=7, p=0.004.
    This is a small quick-profile result; the earlier full run used the first aggressive rule and a slower stage 1 (0.62x-1.19x).
 3. In one case (d=9, p=0.003) NVIDIA's trained Ising model left 2.9 % of the syndrome weight and resolved 47 % of shots completely. Its end-to-end timing has not been validly measured.
 
@@ -129,7 +134,7 @@ In CPU plumbing runs (random weights, so the logical-error numbers are meaningle
 | Learned MLP gate | `gate.py` | unit-tested |
 | Hybrid surface-code pipeline + trivial non-AI baseline | `pipeline.py` | unit-tested |
 | Batched min-sum BP (CUDA/CPU) with BP+OSD fallback; circuit-level `DemBpOsd` | `bp_gpu.py`, `decoders.py` | unit-tested against a dense reference |
-| Bivariate-bicycle qLDPC codes, exact logical-failure check over GF(2) | `codes.py`, `gf2.py` | unit-tested |
+| Bivariate-bicycle qLDPC codes, GF(2) row-space logical-failure check | `codes.py`, `gf2.py` | unit-tested |
 | Optional CUDA-Q QEC `nv-qldpc-decoder` backend | `cudaq_qec_adapter.py` | not tested (library not installed) |
 | NVIDIA Ising head-to-head and full pipeline | `ising_adapter.py`, `scripts/run_ising_bench.py`, `scripts/run_full_pipeline.py` | plumbing test with random weights |
 | Benchmark harness (LER with Wilson CIs, throughput, p50/p95/p99 single-shot latency, 256-shot micro-batch latency, environment record) | `bench.py`, `scripts/run_benchmarks.py` | unit-tested |
@@ -177,40 +182,14 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: create
 2. For the Ising and full-pipeline steps you need a free Hugging Face account, acceptance of the model terms, and a *read* token stored as the Colab secret `HF_TOKEN` (never paste it into a cell). Without it those steps are skipped.
 3. Download the zip, copy the `results/colab-*` folders into the repo, run `python scripts/make_report.py` and `python scripts/make_summary.py` (and `... colab-gpu-quick`), commit, and enable **GitHub Pages** (Settings > Pages > `main` / `docs`).
 
-## Results history
+## Results history (short)
 
-### Colab T4, run 1 (old code; notes in `docs/runs/colab-gpu-run1.md`)
-* **Surface code:** the first GPU pre-decoder gave throughput ratios of at most 1.25x (d=5, p=0.002); from d=9 it resolved ~0 shots, with a ratio near 1; at some points it added logical errors (d=7, p=0.002: 3.75e-4 vs 2.5e-4).
-* **qLDPC:** the first GPU BP implementation (dense tensors) had a throughput ratio of 0.07x-0.34x (about 3-14x slower than the C++ `ldpc` library).
+* **Run 1 (first code):** GPU BP was slower than the C++ `ldpc` (ratio 0.07-0.34); the first surface-code pre-decoder reached at most 1.25.
+* **Run 2 (full profile, BP rewrite):** qLDPC ratio 0.98-1.58 with equal logical-error counts; the first (aggressive) surface-code rule 0.62-1.19 with extra logical errors at some points.
+* **Ising head-to-head:** one trained-weight case (d=9, p=0.003: 2.9 % of syndrome weight left, 47 % of shots fully resolved); its timing was invalid and later attempts produced no results.
+* **Run 3 (current code, quick profile):** the `safe` radius-2 rule 1.08-1.32 with the same error counts as PyMatching; the `fast` radius-1 rule 0.90-2.53 with extra errors at one point.
 
-### Colab T4, run 2: full profile, 200,000 shots per surface point, 20,000 per qLDPC point (`results/colab-gpu/`, code at commit `a381f7f`)
-* **qLDPC:** after the BP rewrite (edge lists, converged shots dropped) the GPU/CPU throughput ratio was 0.98x-1.58x with equal logical-error counts (headline table above). Single-shot latency was about 1.6-6 ms on the GPU vs 11-40 µs for `ldpc`.
-  The "BP converged" column in that run was wrong (read after the latency loop); fixed afterwards.
-* **Surface code, first aggressive radius-1 rule:** throughput ratio 0.62x-1.19x. At d>=7 stage 1 cost much of what it saved (d=13, p=0.001: 3.60 s of stage-1 time while the PyMatching stage fell from 3.34 s to 1.33 s) and logical errors were higher
-  (d=13, p=0.004: 161 vs 109; d=9, p=0.004: 586 vs 486). The MLP gate had a ratio below 1 at most points.
-
-### NVIDIA Ising head-to-head, one T4 case with trained weights (`docs/runs/colab-ising-run1.md`)
-At d=9, p=0.003 (20k shots, NVIDIA's circuit), the trained Ising model left 2.9 % of the syndrome weight and fully resolved 47 % of shots, and the PyMatching stage took 0.10 s vs 0.39 s for PyMatching alone,
-with 26 vs 22 logical errors in the respective runs (no statistical comparison was made). Our first local rule left about 48 % of the weight (36 logical errors in its run).
-The run's stage-1 time (15.6 s) included torch.compile warm-up and is not a valid speed measurement; the adapter has since been changed (warm-up outside the timed region, fixed 2,048-shot chunks).
-
-### Colab T4, run 3: current code, quick profile (20k shots; `results/colab-gpu-quick/`, table in [docs/RESULTS_colab-gpu-quick.md](docs/RESULTS_colab-gpu-quick.md))
-
-| rule | throughput ratio vs PyMatching | logical errors (ours / PyMatching) | stage 1 per 20k shots |
-|---|---|---|---|
-| safe, radius 2 (lossless in our tests) | 1.08x - 1.32x (4 of 4 points) | 27/27, 155/155, 5/5, 72/71 | 3-8 ms |
-| fast, radius 1 | 0.90x - 2.53x (3 of 4 points above 1.02x) | 27/27, 158/155, 5/5, 80/71 | 3-7 ms |
-
-* Stage 1 took about 2-4x less time per 20k shots than in run 2 (the rule also changed, so the ratios are not attributable to one cause).
-* Caveats: only d=5 and 7; at 256-shot micro-batches the GPU surface-code pipeline was slower than PyMatching at 6 of 8 rows (1.2-3.2 ms vs 0.6-2.5 ms) and faster at d=7, p=0.002 (1.6-1.8 ms vs 2.0 ms); for qLDPC it was 49-74 ms vs 3-6 ms;
-  the quick profile's 1,000-shot qLDPC runs are too small to load the GPU (ratio 0.18x-0.22x), so the 20,000-shot full run is the fair qLDPC comparison.
-* The Ising and full-pipeline steps wrote only `meta.json` in this run: every case failed. The adapter now runs NVIDIA's pipeline in fixed 2,048-shot chunks and frees GPU memory between cases;
-  the traceback of the failed run was not captured, so this is a hardening, not a confirmed diagnosis.
-
-### What changed along the way
-* **Accuracy fix found on CPU:** requiring that nothing else fired within two hops of an isolated pair (`radius=2`, now the default) removed the extra logical errors in our CPU tests
-  (d=9, p=0.004: 449 vs 448 baseline errors; d=7, p=0.002: 52 vs 52, 200k shots each); the PyMatching stage then ran 1.1-1.3x faster instead of 1.4-1.7x. The aggressive rule is kept as `radius=1`.
-* **Stage 1 on the GPU:** 1-byte uploads widened on the device, fp16 matrix products (exact for these small integer counts), host-side bookkeeping outside the timed region; the GPU code path is unit-tested for equality with the CPU path.
+Full chronology with the numbers behind each statement: [docs/HISTORY.md](docs/HISTORY.md).
 
 ## Tests
 

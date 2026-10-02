@@ -2,7 +2,7 @@
 
 A small MLP reads the raw detector syndrome and predicts the logical flip. A
 calibrated confidence threshold decides which shots the network may answer on its
-own; everything else is offloaded to the exact global decoder (MWPM). The threshold
+own; everything else is offloaded to the global decoder (MWPM). The threshold
 is calibrated on held-out data to limit the extra logical errors it adds; this is an empirical check on the tested cases, not a guarantee.
 """
 from __future__ import annotations
