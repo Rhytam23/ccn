@@ -37,7 +37,7 @@
 | 13 | 0.002 | first version (r=1) | 32,605 | 26,710 | **0.82x** | 1.85x | 2 / 0 | 1.00e-05 [2.7e-06, 3.6e-05] | 0.00e+00 [0.0e+00, 1.9e-05] | 38 % |
 | 13 | 0.004 | first version (r=1) | 13,293 | 12,726 | **0.96x** | 1.32x | 161 / 109 | 8.05e-04 [6.9e-04, 9.4e-04] | 5.45e-04 [4.5e-04, 6.6e-04] | 58 % |
 
-Caveats: batch throughput only (single-shot latency is worse on the GPU than on the CPU); the surface-code rows are for the first, aggressive local rule, which also adds logical errors at some points (compare the error columns); the fp16 stage 1 and the lossless `radius=2` rule were not part of this run. Ratios are relative to CPU baselines on the same Colab machine.
+Caveats: batch throughput only (single-shot latency is worse on the GPU than on the CPU); the surface-code rows are for the first, aggressive local rule, which also adds logical errors at some points (compare the error columns); the fp16 stage 1 and the `radius=2` rule were not part of this run. Ratios are relative to CPU baselines on the same Colab machine.
 
 ## Environment (from `results/colab-gpu/meta.json`)
 

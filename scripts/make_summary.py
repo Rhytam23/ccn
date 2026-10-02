@@ -110,7 +110,7 @@ else:
     surf_title = "GPU local pre-decoder (first, aggressive radius-1 rule) + PyMatching vs PyMatching alone"
     caveat = (
         "Caveats: batch throughput only (single-shot latency is worse on the GPU than on the CPU); the surface-code rows are for the first, aggressive local rule, "
-        "which also adds logical errors at some points (compare the error columns); the fp16 stage 1 and the lossless `radius=2` rule were not part of this run. "
+        "which also adds logical errors at some points (compare the error columns); the fp16 stage 1 and the `radius=2` rule were not part of this run. "
         "Ratios are relative to CPU baselines on the same Colab machine.\n"
     )
 

@@ -78,7 +78,7 @@ PyMatching stays the main surface-code baseline because it is the fastest practi
 | BB[[144,12,12]] | 0.04 | 19,885 | 24,982 | **1.26x** | 233 / 233 |
 | BB[[144,12,12]] | 0.06 | 7,627 | 7,853 | **1.03x** | 1772 / 1772 |
 
-Caveats: batch throughput only (single-shot latency is worse on the GPU than on the CPU); the surface-code rows are for the first, aggressive local rule, which also adds logical errors at some points (compare the error columns); the fp16 stage 1 and the lossless `radius=2` rule were not part of this run. Ratios are relative to CPU baselines on the same Colab machine.
+Caveats: batch throughput only (single-shot latency is worse on the GPU than on the CPU); the surface-code rows are for the first, aggressive local rule, which also adds logical errors at some points (compare the error columns); the fp16 stage 1 and the `radius=2` rule were not part of this run. Ratios are relative to CPU baselines on the same Colab machine.
 
 Confidence intervals, surface-code tables and the full environment record: [docs/RESULTS.md](docs/RESULTS.md).
 <!-- RESULTS:END -->
