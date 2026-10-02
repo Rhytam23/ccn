@@ -13,7 +13,8 @@ if not os.path.exists("/content/repo"):
     subprocess.run(["git", "clone", "--depth", "1", f"https://github.com/{GITHUB_REPO}.git", "/content/repo"], check=True)
 %cd /content/repo
 !pip -q install -r requirements-colab.txt
-sys.path.insert(0, "/content/repo/src")  # editable installs are not visible to an already-running kernel
+!pip -q install -e . --no-deps   # for shell commands (pytest, scripts)
+sys.path.insert(0, "/content/repo/src")  # for this kernel: editable installs are not visible to an already-running kernel
 import torch
 print("CUDA:", torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else "")
 !nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv'''
