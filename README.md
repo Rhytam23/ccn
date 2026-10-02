@@ -30,6 +30,23 @@ Stim syndromes ──► [GPU] pre-decoder ──► empty residual? ──yes�
 | Benchmark harness (LER with Wilson CIs, throughput, p50/p95/p99 single-shot latency) | `bench.py`, `scripts/run_benchmarks.py` | tested |
 | Interactive results website (GitHub Pages ready) | `docs/index.html` (built by `scripts/make_report.py`) | working |
 
+## What is ours, what is not, and what we claim
+
+**Not ours (used as-is, credited):** NVIDIA's Ising pre-decoder and its weights (NVIDIA Open Model License; code Apache-2.0), CUDA-Q QEC, Stim, PyMatching, the `ldpc` library, PyTorch.
+
+**Ours:**
+* a batched, edge-list **GPU belief-propagation decoder** that drops converged shots from the working batch (unit-tested to match a dense reference bit for bit; logical error counts identical to `ldpc` on a T4),
+* a **local GPU pre-decoder for the surface code** with a measured accuracy/speed dial (`radius=2` lossless, `radius=1` faster but lossy), plus the negative result that it is far weaker than a learned pre-decoder,
+* the **benchmark harness** (same shots, same session, Wilson intervals, stage timings, single-shot *and* 256-shot micro-batch latency) and the **head-to-head wiring around NVIDIA's pipeline**,
+* the reproducible Colab notebooks and results site.
+
+**What we claim (and only this):**
+1. GPU BP matches `ldpc`'s logical error counts exactly and gives 1.0-1.6x batch throughput on a T4 (qLDPC, code-capacity noise).
+2. A classical local pre-decoder can be made lossless but only speeds the global decoder up ~1.1-1.3x; the end-to-end surface-code gain from our own rule is about 1x on a T4.
+3. NVIDIA's trained Ising model leaves ~3 % of the syndrome at d=9 (one measured case so far); its end-to-end timing is pending a valid re-run.
+
+**What we do not claim:** a real-time (single-shot, microsecond) GPU advantage: on the T4 the GPU paths lose at batch size 1. No surface-code speed-up from our own rule beyond ~1.3x, and no Ising speed-up until `results/colab-ising/` exists.
+
 ## Documentation
 
 | Doc | Contents |

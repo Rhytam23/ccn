@@ -71,6 +71,22 @@ def _latency(fn, items, warmup=20, device="cpu"):
     return percentiles_us(ts)
 
 
+def _batch_latency_ms(decode_batch, data, bs=256, reps=20, device="cpu"):
+    """Wall-clock per micro-batch of `bs` shots (median over `reps`). Relevant when many logical qubits
+    stream syndromes in parallel; batch size 1 (lat_p50_us) is the worst case for accelerators."""
+    n = len(data)
+    if n < bs:
+        return float("nan")
+    decode_batch(data[:bs])  # warm-up
+    ts = []
+    for r in range(reps):
+        i = (r * bs) % max(1, n - bs)
+        t0 = now(device)
+        decode_batch(data[i : i + bs])
+        ts.append(now(device) - t0)
+    return float(np.median(ts) * 1e3)
+
+
 def _row(**kw):
     return kw
 
@@ -111,11 +127,12 @@ def run_surface(d, p, cfg, device, log=print):
         errs = int((pred[:, 0] != te_o[:, 0]).sum())
         ler, lo, hi = wilson(errs, n)
         lat = _latency(dec.decode_one, lat_items, device=device)
+        lat_b = _batch_latency_ms(dec.decode_batch, te_d, device=device)
         rows.append(
             _row(
                 code="surface", d=d, rounds=d, p=p, decoder=name, device=device if mode in ("nn", "local") else "cpu",
                 shots=n, errors=errs, ler=ler, ler_lo=lo, ler_hi=hi,
-                throughput_sps=n / stats["t_total"], lat_p50_us=lat["p50"], lat_p95_us=lat["p95"], lat_p99_us=lat["p99"],
+                throughput_sps=n / stats["t_total"], lat_p50_us=lat["p50"], lat_p95_us=lat["p95"], lat_p99_us=lat["p99"], lat_b256_ms=lat_b,
                 accept_rate=stats["accept_rate"], syndrome_weight_kept=stats["syndrome_weight_kept"], t_stage1_s=stats["t_gate"], t_global_s=stats["t_match"], extra=f"gate_train_s={train_s:.1f};thr_logit={gate.threshold:.3f}",
             )
         )
@@ -147,10 +164,11 @@ def run_qldpc(code, p, cfg, device, log=print):
         ler, lo, hi = wilson(errs, n)
         fn = (lambda x: dec.decode_batch(x)) if not isinstance(dec, CpuBpOsd) else (lambda x: dec.decode_one(x[0]))
         lat = _latency(fn, lat_items, warmup=10, device=dev)
+        lat_b = _batch_latency_ms(dec.decode_batch, S, device=dev)
         rows.append(
             _row(
                 code=code.name, d=0, rounds=0, p=p, decoder=name, device=dev, shots=n, errors=errs, ler=ler, ler_lo=lo,
-                ler_hi=hi, throughput_sps=n / dt, lat_p50_us=lat["p50"], lat_p95_us=lat["p95"], lat_p99_us=lat["p99"],
+                ler_hi=hi, throughput_sps=n / dt, lat_p50_us=lat["p50"], lat_p95_us=lat["p95"], lat_p99_us=lat["p99"], lat_b256_ms=lat_b,
                 accept_rate=conv if conv is not None else np.nan, extra="code-capacity noise; accept_rate = BP converged fraction",
             )
         )

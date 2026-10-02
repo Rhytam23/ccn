@@ -97,16 +97,16 @@ function render(){
   $("ising_sec").style.display = I.length ? "block" : "none";
   $("ising_tab").innerHTML = "<table><tr><th>d / p</th><th>decoder</th><th>LER</th><th>shots/s</th><th>stage 1 s</th><th>stage 2 s</th><th>syndrome kept</th></tr>" +
     I.map(r=>`<tr><td>d=${r.d} p=${r.p}</td><td>${r.decoder}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${r.t_stage1_s==null?"-":Number(r.t_stage1_s).toFixed(3)}</td><td>${r.t_global_s==null?"-":Number(r.t_global_s).toFixed(3)}</td><td>${r.syndrome_weight_kept==null?"-":(100*r.syndrome_weight_kept).toFixed(0)+"%"}</td></tr>`).join("") + "</table>";
-  $("lat").innerHTML = "<table><tr><th>decoder</th><th>p</th><th>LER</th><th>throughput/s</th><th>p50 µs</th><th>p95 µs</th><th>p99 µs</th><th>fast-path</th></tr>" +
-    rows.map(r=>`<tr><td>${r.decoder}</td><td>${r.p}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p95_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${fmt(100*r.accept_rate,1)}%</td></tr>`).join("") + "</table>";
+  $("lat").innerHTML = "<table><tr><th>decoder</th><th>p</th><th>LER</th><th>throughput/s</th><th>p50 µs</th><th>p95 µs</th><th>p99 µs</th><th>256-batch ms</th><th>fast-path</th></tr>" +
+    rows.map(r=>`<tr><td>${r.decoder}</td><td>${r.p}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p95_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${fmt(r.lat_b256_ms,2)}</td><td>${fmt(100*r.accept_rate,1)}%</td></tr>`).join("") + "</table>";
 
   const Q = run.qldpc || [], qd = groupBy(Q,"decoder"), qn = Object.keys(qd);
   const lab = r => r.code+" p="+r.p;
   const qtr = (key,type) => qn.map((n,i)=>({x:qd[n].map(lab), y:qd[n].map(r=>r[key]), name:n, type, marker:{color:colors[i%6]}}));
   Plotly.newPlot("q_thr", qtr("throughput_sps","bar"), {...layout("BP+OSD throughput","code / p","shots / s","log"), barmode:"group"}, {displayModeBar:false});
   Plotly.newPlot("q_ler", qtr("ler","bar"), {...layout("Logical error rate (must match)","code / p","LER","log"), barmode:"group"}, {displayModeBar:false});
-  $("q_tab").innerHTML = "<table><tr><th>code / p</th><th>decoder</th><th>LER</th><th>shots/s</th><th>p50 µs</th><th>p99 µs</th><th>BP converged</th></tr>" +
-    Q.map(r=>`<tr><td>${lab(r)}</td><td>${r.decoder}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${r.accept_rate==null?"-":fmt(100*r.accept_rate,1)+"%"}</td></tr>`).join("") + "</table>";
+  $("q_tab").innerHTML = "<table><tr><th>code / p</th><th>decoder</th><th>LER</th><th>shots/s</th><th>p50 µs</th><th>p99 µs</th><th>256-batch ms</th><th>BP converged</th></tr>" +
+    Q.map(r=>`<tr><td>${lab(r)}</td><td>${r.decoder}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${fmt(r.lat_b256_ms,2)}</td><td>${r.accept_rate==null?"-":fmt(100*r.accept_rate,1)+"%"}</td></tr>`).join("") + "</table>";
 }
 Object.keys(RUNS).forEach(t=>$("run").add(new Option(t,t)));
 $("run").onchange = ()=>{ $("d").innerHTML=""; render(); }; $("d").onchange = render;
