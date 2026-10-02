@@ -83,6 +83,11 @@ Batch throughput only: single-shot latency is ~1.6-6 ms on the GPU vs ~11-40 us 
 **Surface code, run-2 code (aggressive radius-1 local rule): not a win.** At d>=7 stage 1 cost more than it saved (d=13: stage 1 3.6 s vs 3.3 s saved) and it added logical
 errors (d=13, p=0.004: 161 vs 109; d=9, p=0.004: 586 vs 486). The MLP gate was slower than PyMatching almost everywhere.
 
+### NVIDIA Ising head-to-head (Colab T4, trained weights; `results/colab-ising-run1/NOTES.md`): one case so far
+At d=9, p=0.003 (20k shots, NVIDIA's circuit) the trained Ising model leaves only **2.9 %** of the syndrome weight and fully resolves **47 %** of shots, making the PyMatching stage ~3.8x faster
+(0.10 s vs 0.39 s) at a similar error count (26 vs 22). Our classical local rule keeps ~48 % of the weight. The run's stage-1 time (15.6 s) is a torch.compile warm-up artifact, now fixed in the adapter,
+so **no Ising end-to-end speed-up is claimed yet**: rerun notebook 04 to get a valid timing and the missing cases.
+
 ### What changed after run 2 (CPU-verified, GPU not yet re-measured)
 * **Accuracy fix found on CPU:** requiring that *nothing else fired within two hops* of an isolated pair (`radius=2`, now the default) removes the extra logical errors entirely
   (d=9, p=0.004: 449 vs 448 baseline errors; d=7, p=0.002: 52 vs 52, 200k shots each) at the price of a smaller speed-up for the global decoder (1.1-1.3x instead of 1.4-1.7x).

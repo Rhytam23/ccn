@@ -161,7 +161,10 @@ def run_comparison(ctx, lat_shots: int = 200, log=print) -> list[dict]:
     # 2) NVIDIA Ising + PyMatching
     dt = torch.from_numpy(det).to(torch.uint8).to(dev)
     with torch.no_grad():
-        pipe_out = ctx.pipe(dt[: min(n, 256)])  # warm-up / compile
+        # Warm up with the full batch shape: NVIDIA's pipeline is torch.compile'd and re-specialises for every
+        # new batch shape, so a smaller warm-up batch would put JIT compilation inside the timed region.
+        ctx.pipe(dt)
+        ctx.pipe(dt)
     t0 = now(dev)
     with torch.no_grad():
         out = ctx.pipe(dt)

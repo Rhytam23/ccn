@@ -38,7 +38,21 @@ meta["ising_weights"] = "trained" if weights else "RANDOM (plumbing check only)"
 rows = []
 for d in a.distances:
     for p in a.ps:
-        ctx = build_context(a.repo, distance=d, p=p, shots=a.shots, model_id=a.model_id, weights=weights, device=device)
-        rows += run_comparison(ctx)
-        pd.DataFrame(rows).to_csv(out / "ising.csv", index=False)
+        try:
+            ctx = build_context(a.repo, distance=d, p=p, shots=a.shots, model_id=a.model_id, weights=weights, device=device)
+            rows += run_comparison(ctx)
+            pd.DataFrame(rows).to_csv(out / "ising.csv", index=False)
+        except Exception:
+            import traceback
+
+            print(f"!! case d={d} p={p} failed:")
+            traceback.print_exc()
+        finally:
+            import gc
+
+            gc.collect()
+            if device.startswith("cuda"):
+                import torch
+
+                torch.cuda.empty_cache()
 print("wrote", out / "ising.csv")
