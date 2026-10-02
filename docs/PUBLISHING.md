@@ -4,7 +4,7 @@
 - [ ] `git status` shows no secrets: no tokens, `.env`, Drive paths or personal emails (`.gitignore` already excludes `.env`, keys, weights, `.venv`).
 - [ ] Notebook outputs are cleared of anything personal (Runtime > Clear all outputs) unless you want the outputs visible.
 - [ ] NVIDIA model weights are **not** in the repo (`*.safetensors` is git-ignored). Link to the Hugging Face model pages instead.
-- [ ] Replace `Rhytam23/ccn` in the notebooks (`scripts/make_notebooks.py`, then re-run it) and in the README.
+- [ ] Set your repo name (`Rhytam23/ccn`) in `scripts/make_notebooks.py`, then re-run it to regenerate the notebooks.
 - [ ] Add team names to `CITATION.cff` and `LICENSE`.
 
 ## Commands
