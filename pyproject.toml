@@ -21,3 +21,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "slow: scientific error-count regression or broad quality smoke check",
+  "quality_smoke: broad quality bands, not a statistical regression guarantee",
+]

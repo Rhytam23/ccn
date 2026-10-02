@@ -6,5 +6,5 @@ python3 -m venv .venv
 pip install --upgrade pip
 pip install -r requirements.txt
 pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install -e .
+pip install -e ".[dev]"
 pytest -q

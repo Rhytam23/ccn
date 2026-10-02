@@ -26,24 +26,33 @@ class GateMLP(nn.Module):
 
 
 class Gate:
-    def __init__(self, n_det: int, n_obs: int = 1, hidden: int = 256, device: str = "cpu"):
+    def __init__(self, n_det: int, n_obs: int = 1, hidden: int = 256, device: str = "cpu", seed: int = 0):
         self.device = device
-        self.model = GateMLP(n_det, n_obs, hidden).to(device)
+        # Seed initialization as well as minibatch order; preserve the caller's CPU RNG.
+        with torch.random.fork_rng(devices=[]):
+            torch.random.default_generator.manual_seed(seed)
+            self.model = GateMLP(n_det, n_obs, hidden)
+        self.model = self.model.to(device)
         self.threshold = float("inf")  # |logit| confidence; accept nothing until calibrated
 
     def fit(self, dets: np.ndarray, obs: np.ndarray, epochs: int = 6, batch: int = 1024, lr: float = 2e-3, seed: int = 0):
-        torch.manual_seed(seed)
-        X = torch.as_tensor(dets, dtype=torch.float32, device=self.device)
-        Y = torch.as_tensor(obs, dtype=torch.float32, device=self.device)
+        if batch < 1:
+            raise ValueError("batch must be positive")
+        # Keep the dataset in its compact host dtype. Only widen/upload one minibatch.
+        X = torch.as_tensor(dets, device="cpu")
+        Y = torch.as_tensor(obs, device="cpu")
+        generator = torch.Generator(device="cpu").manual_seed(seed)
         opt = torch.optim.Adam(self.model.parameters(), lr=lr)
         lossf = nn.BCEWithLogitsLoss()
         self.model.train()
         for _ in range(epochs):
-            perm = torch.randperm(len(X), device=self.device)
+            perm = torch.randperm(len(X), generator=generator)
             for i in range(0, len(X), batch):
                 idx = perm[i : i + batch]
                 opt.zero_grad()
-                lossf(self.model(X[idx]), Y[idx]).backward()
+                xb = X[idx].to(device=self.device, dtype=torch.float32)
+                yb = Y[idx].to(device=self.device, dtype=torch.float32)
+                lossf(self.model(xb), yb).backward()
                 opt.step()
         self.model.eval()
         return self

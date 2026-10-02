@@ -1,9 +1,45 @@
 # qechybrid: GPU-accelerated hybrid quantum error-correction decoding
 
-Real-time error correction creates demanding classical workloads for fault-tolerant quantum computers
-(see the motivation in NVIDIA's [Ising-Decoding](https://github.com/NVIDIA/Ising-Decoding) cookbook and [paper](https://arxiv.org/abs/2604.12841)).
-This repository is a **measured, reproducible benchmark** of GPU-batched decoders on a free Google Colab T4, with an **experimental AI-pre-decoder track**
-built around NVIDIA's trained Ising model. It reports where the GPU wins, where it loses, and which parts are not yet measured.
+Quantum error correction needs fast classical decoding. This research repo measures
+how much batch throughput a GPU pre-decoder can gain, and what decoding accuracy it costs.
+
+```text
+syndrome → parallel pre-decoder → residual syndrome → strong global decoder → prediction
+```
+
+* Historical T4 qLDPC runs reached 0.98–1.58× CPU batch throughput with equal logical-error counts on the tested shots. They used a single throughput repetition.
+* Corrected local T600 full measurements show radius 2 slower at every surface point, with five additional errors across four points. Radius 1's marginal aggregate gains have paired timing ranges crossing 1× and add errors. Historical T4 timings still need a corrected T4 rerun.
+* Single-shot latency favored the CPU on the measured small codes. Batch throughput is a separate metric.
+* Trained Ising/full-pipeline performance remains unverified; the learned MLP is an optional ablation.
+
+**Not claimed:** a real-time GPU advantage, MWPM equivalence of the local heuristic,
+or statistically established accuracy equivalence from matching error counts.
+
+![Corrected local surface accuracy and throughput trade-off](docs/figs/local-gpu-corrected-full_surface_frontier.png)
+
+*Corrected T600 full run, 200,000 surface shots per point, five timing repetitions.
+Aggregate throughput ratios in this figure differ from the median of paired ratios;
+both are reported with timing spread in [the local results](docs/RESULTS_local-gpu-corrected-full.md).
+The historical T4 quick run below has 72 vs 71 errors at one point and predates
+the corrected [timing methodology](docs/METHODOLOGY.md).*
+
+To reproduce the corrected local path, create/activate a virtual environment and
+install the PyTorch build for your platform first (CPU example below). Then:
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -e ".[dev]"
+python -m pytest -q
+python scripts/run_benchmarks.py --profile quick --device auto --only surface --surface-modes none zero local --reps 5 --tag corrected-quick
+```
+
+For a CUDA host, preinstall the corresponding CUDA PyTorch build instead of the CPU
+build. See [the GPU runbook](docs/GPU_RUNBOOK.md) for larger experiments and
+[CONTRIBUTING.md](CONTRIBUTING.md) for the editable-install and lock-file workflow.
+The historical results and detailed architecture follow below.
+
+Validation of each finding, exact regression tests, and larger local measurements:
+[docs/VALIDATION.md](docs/VALIDATION.md).
 
 ## Pipelines
 
@@ -54,10 +90,10 @@ PyMatching stays the main surface-code baseline because it is the fastest practi
 
 *Throughput ratio = GPU-pipeline shots/s ÷ CPU-baseline shots/s on the same shots in the same session. A value above 1 means the GPU pipeline is faster, below 1 means it is slower. It is not a latency.*
 
-* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio 0.98x to 1.58x** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x; the GPU is slightly slower at the points below 1.00x). Logical-error counts are identical on the same shots at every point (not a proof of equivalence; intervals in `docs/RESULTS.md`).
+* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio 0.98x to 1.58x** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x; the GPU is slower at points below 1.00x). Logical-error counts are identical at every point on the same shots (not a proof of equivalence; intervals in the tables below).
   *This is batch throughput, not latency: single-shot latency is worse on the GPU than on the CPU, so this is not a real-time result.*
-* **Surface code, current code, quick profile (d=5, 7; 20,000 shots; `results/colab-gpu-quick/`), safe r=2 rule: throughput ratio 1.08x to 1.32x** (4 of 4 points above 1.02x; 1 extra logical error in total at the points where ours was worse).
-* **Surface code, current code, quick profile (d=5, 7; 20,000 shots; `results/colab-gpu-quick/`), fast r=1 rule: throughput ratio 0.90x to 2.53x** (3 of 4 points above 1.02x; 12 extra logical errors in total at the points where ours was worse).
+* **Surface code, historical radius-1/2 code, quick profile (d=5, 7; 20,000 shots; `results/colab-gpu-quick/`), conservative r=2 rule: throughput ratio 1.08x to 1.32x** (4 of 4 points above 1.02x; 1 extra logical error in total at the points where ours was worse).
+* **Surface code, historical radius-1/2 code, quick profile (d=5, 7; 20,000 shots; `results/colab-gpu-quick/`), fast r=1 rule: throughput ratio 0.90x to 2.53x** (3 of 4 points above 1.02x; 12 extra logical errors in total at the points where ours was worse).
 * **Surface code, older code, full profile (d=5 to 13; 200,000 shots; `results/colab-gpu/`): throughput ratio 0.62x to 1.19x** (4 of 12 points above 1.02x; 344 extra logical errors in total at the points where ours was worse).
 
 | code | p | C++ ldpc BP+OSD (shots/s) | GPU BP + OSD fallback (shots/s) | throughput ratio | logical errors (GPU / ldpc) |
@@ -69,7 +105,7 @@ PyMatching stays the main surface-code baseline because it is the fastest practi
 | BB[[144,12,12]] | 0.04 | 19,885 | 24,982 | **1.26x** | 233 / 233 |
 | BB[[144,12,12]] | 0.06 | 7,627 | 7,853 | **1.03x** | 1772 / 1772 |
 
-Caveats: batch throughput only (the GPU is slower than the CPU for single shots; see `docs/RESULTS.md`). Surface-code results from the current code come from the quick profile only (d=5 and 7, small error counts); the older full-profile surface-code result (last bullet above) used the first, aggressive radius-1 rule and a slower stage 1. Ratios are relative to CPU baselines on the same Colab machine.
+Historical timing protocol: surface used best-of-two, qLDPC used one repetition, and CPU-only surface modes synchronized CUDA in GPU runs. Marginal surface ratios need a corrected GPU rerun. Caveats: batch throughput only (the GPU is slower than the CPU for single shots; see `docs/RESULTS.md`). Historical surface-code results for both radii come from the quick profile only (d=5 and 7, small error counts); the older full-profile surface-code result (last bullet above) used the first, aggressive radius-1 rule and a slower stage 1. Ratios are relative to CPU baselines on the same Colab machine.
 
 Confidence intervals, surface-code tables and the environment record: [docs/RESULTS.md](docs/RESULTS.md), [docs/RESULTS_colab-gpu-quick.md](docs/RESULTS_colab-gpu-quick.md).
 <!-- RESULTS:END -->
@@ -80,7 +116,7 @@ Confidence intervals, surface-code tables and the environment record: [docs/RESU
 |---|---|
 | Batched GPU BP + OSD fallback (qLDPC) | **Measured on a T4** (full profile, 20k shots/point): see the table above |
 | Local surface-code pre-decoder, first aggressive radius-1 rule | **Measured on a T4** (full profile, 200k shots): throughput ratio 0.62x-1.19x and extra logical errors at some points |
-| Local pre-decoder: `safe` radius-2 rule and `fast` radius-1 rule, with the fp16 stage 1 | **Measured on a T4, quick profile only** (d=5 and 7, 20k shots) |
+| Local pre-decoder: conservative radius-2 rule and `fast` radius-1 rule, with the fp16 stage 1 | **Measured on a T4, quick profile only** (d=5 and 7, 20k shots) |
 | Learned MLP gate | **Measured on a T4**: resolved at most ~2 % of shots at d>=7, so it was not useful there; kept as an ablation |
 | NVIDIA Ising trained model | **One trained-weight T4 case** (d=9, p=0.003); its timing was invalid (compile warm-up inside the timed region); later runs produced no results |
 | CUDA-Q QEC `nv-qldpc-decoder` | **Not verified**: `cudaq-qec` was not installed in any run (the decoder is a closed-source library, see the [CUDA-Q QEC docs](https://nvidia.github.io/cudaq-qec/)) |
@@ -107,13 +143,13 @@ around NVIDIA's Ising pre-decoder, with explicit throughput, latency and logical
 
 **Ours:**
 * a batched, edge-list **GPU belief-propagation decoder** that drops converged shots from the working batch (unit-tested to match a dense reference bit for bit; equal logical-error counts to `ldpc` on a T4),
-* a **local GPU pre-decoder for the surface code** with a measured accuracy/throughput dial (`radius=2` showed no extra logical errors in our tests, `radius=1` is faster but adds errors at some points); in the one measured case (d=9, p=0.003, NVIDIA's circuit) it leaves substantially more syndrome weight than the Ising model (48 % vs 2.9 %),
+* a **local GPU pre-decoder for the surface code** with a measured accuracy/throughput dial (`radius=2` had one extra error at one point in the stored quick T4 run, `radius=1` is faster but adds errors at some points); in the one measured case (d=9, p=0.003, NVIDIA's circuit) it leaves substantially more syndrome weight than the Ising model (48 % vs 2.9 %),
 * the **benchmark harness** (same shots, same session, Wilson intervals, stage timings, single-shot and 256-shot micro-batch latency) and the **head-to-head wiring around NVIDIA's pipeline**,
 * the reproducible Colab notebook and results site.
 
 **What we claim (and only this):**
 1. GPU BP gives equal logical-error counts to `ldpc` on the same shots and a GPU/CPU batch-throughput ratio of 0.98x-1.58x on a T4 (qLDPC, code-capacity noise; best case [[144,12,12]], p=0.02).
-2. On a T4 (run 3, quick profile, d=5 and 7, 20k shots) the `safe` radius-2 rule has a throughput ratio of 1.08x-1.32x with the same logical-error counts as PyMatching in that run; the fast `radius=1` rule reaches 2.53x (d=7, p=0.002) with 80 vs 71 errors at d=7, p=0.004.
+2. On a T4 (run 3, quick profile, d=5 and 7, 20k shots) the conservative radius-2 rule has a throughput ratio of 1.08x-1.32x with 72 vs 71 logical errors at d=7, p=0.004 and equal counts at the other three points; the fast `radius=1` rule reaches 2.53x (d=7, p=0.002) with 80 vs 71 errors at d=7, p=0.004.
    This is a small quick-profile result; the earlier full run used the first aggressive rule and a slower stage 1 (0.62x-1.19x).
 3. In one case (d=9, p=0.003) NVIDIA's trained Ising model left 2.9 % of the syndrome weight and resolved 47 % of shots completely. Its end-to-end timing has not been validly measured.
 
@@ -142,7 +178,7 @@ In CPU plumbing runs (random weights, so the logical-error numbers are meaningle
 | Results website (GitHub Pages ready) | `docs/index.html` (built by `scripts/make_report.py`) | element-id test |
 
 ### Results layout
-`results/<tag>/` holds data only: `colab-gpu` (T4, full profile), `colab-gpu-quick` (T4, current code, quick profile), `local-cpu` (CPU), and, when they exist, `colab-ising` and `colab-pipeline`.
+`results/<tag>/` holds data only: `colab-gpu` (historical T4, full profile), `colab-gpu-quick` (historical T4, quick profile), `local-cpu` (historical CPU), and new corrected CPU/T600 quick/full runs. Ising/pipeline results are stored separately when available.
 Run notes live in `docs/runs/` (`colab-gpu-run1.md`, `colab-ising-run1.md`). From now on every `meta.json` also records the git commit, `ldpc` version, CUDA version and GPU memory;
 older runs lack some of these and `docs/RESULTS.md` says "not recorded".
 
@@ -188,7 +224,7 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: create
 * **Run 1 (first code):** GPU BP was slower than the C++ `ldpc` (ratio 0.07-0.34); the first surface-code pre-decoder reached at most 1.25.
 * **Run 2 (full profile, BP rewrite):** qLDPC ratio 0.98-1.58 with equal logical-error counts; the first (aggressive) surface-code rule 0.62-1.19 with extra logical errors at some points.
 * **Ising head-to-head:** one trained-weight case (d=9, p=0.003: 2.9 % of syndrome weight left, 47 % of shots fully resolved); its timing was invalid and later attempts produced no results.
-* **Run 3 (current code, quick profile):** the `safe` radius-2 rule 1.08-1.32 with the same error counts as PyMatching; the `fast` radius-1 rule 0.90-2.53 with extra errors at one point.
+* **Run 3 (historical radius-1/2 code, quick profile):** the conservative radius-2 rule 1.08-1.32 with one extra logical error at one point; the `fast` radius-1 rule 0.90-2.53 with extra errors at one point.
 
 Full chronology with the numbers behind each statement: [docs/HISTORY.md](docs/HISTORY.md).
 

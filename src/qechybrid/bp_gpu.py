@@ -60,6 +60,8 @@ class DenseMinSumBP:
     def decode(self, syndromes):
         """syndromes: [B, m] array in {0,1}. Returns (estimates uint8, converged bool) as numpy."""
         s = torch.as_tensor(np.asarray(syndromes), dtype=torch.float32, device=self.device)
+        if s.shape[0] == 0:
+            return np.empty((0, self.n), dtype=np.uint8), np.empty(0, dtype=bool)
         outs, convs = [], []
         for i in range(0, s.shape[0], self.chunk):
             o, c = self._decode_chunk(s[i : i + self.chunk])
@@ -149,6 +151,11 @@ class BatchedMinSumBP:
             s = syndromes.to(device=self.device, dtype=torch.float32)
         else:
             s = torch.as_tensor(np.asarray(syndromes), dtype=torch.float32, device=self.device)
+        if s.shape[0] == 0:
+            if to_numpy:
+                return np.empty((0, self.n), dtype=np.uint8), np.empty(0, dtype=bool)
+            return (torch.empty((0, self.n), dtype=torch.bool, device=self.device),
+                    torch.empty(0, dtype=torch.bool, device=self.device))
         outs, convs = [], []
         for i in range(0, s.shape[0], self.chunk):
             o, c = self._decode_chunk(s[i : i + self.chunk])

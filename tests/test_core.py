@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from qechybrid.codes import bb_72_12_6, bb_144_12_12
 from qechybrid.data import dem_matrices, sample, surface_circuit
@@ -30,6 +31,8 @@ def test_logical_failure_logic():
     assert not c.logical_failure(e, e ^ stab).any()
 
 
+@pytest.mark.slow
+@pytest.mark.quality_smoke
 def test_gpu_bp_matches_cpu_bposd_quality():
     c = bb_72_12_6()
     p = 0.02
@@ -50,7 +53,9 @@ def test_dem_matrices_consistent():
     assert (dm.priors > 0).all() and (dm.priors < 0.5).all()
 
 
-def test_hybrid_surface_not_worse_than_matching():
+@pytest.mark.slow
+@pytest.mark.quality_smoke
+def test_hybrid_surface_quality_smoke():
     circ = surface_circuit(5, 0.004)
     m = MatchingDecoder(circ)
     trd, tro = sample(circ, 150000, 1)
@@ -68,7 +73,9 @@ def test_hybrid_surface_not_worse_than_matching():
     assert 0 < zero.stats["accept_rate"] < 1
 
 
-def test_local_predecoder_is_exact_enough_and_sparsifies():
+@pytest.mark.slow
+@pytest.mark.quality_smoke
+def test_local_predecoder_quality_smoke_and_sparsifies():
     circ = surface_circuit(5, 0.002)
     m = MatchingDecoder(circ)
     td, to = sample(circ, 60000, 5)
@@ -108,7 +115,9 @@ def test_edge_list_bp_matches_dense_reference():
         pri = np.full(c.n, p)
         en, cn = BatchedMinSumBP(c.hz, pri).decode(s)
         eo, co = DenseMinSumBP(c.hz, pri, chunk=300).decode(s)
-        assert (cn == co).all() and (en[cn] == eo[co]).all()
+        np.testing.assert_array_equal(cn, co)
+        np.testing.assert_array_equal(en, eo)
+        np.testing.assert_array_equal((en[cn].astype(int) @ c.hz.T.astype(int)) % 2, s[cn])
 
 
 def test_dense_gpu_code_path_matches_sparse_cpu_path():
@@ -124,7 +133,9 @@ def test_dense_gpu_code_path_matches_sparse_cpu_path():
         assert torch.equal(ra, rb) and torch.equal(fa, fb)
 
 
-def test_safe_radius_adds_no_logical_errors_and_is_sparser():
+@pytest.mark.slow
+@pytest.mark.quality_smoke
+def test_conservative_radius_quality_smoke_and_sparsifies():
     circ = surface_circuit(7, 0.003)
     m = MatchingDecoder(circ)
     td, to = sample(circ, 60000, 4)
@@ -135,6 +146,8 @@ def test_safe_radius_adds_no_logical_errors_and_is_sparser():
     assert errs <= base * 1.1 + 4
 
 
+@pytest.mark.slow
+@pytest.mark.quality_smoke
 def test_dem_bp_osd_decoder_is_in_the_same_ballpark_as_mwpm():
     """Circuit-level BP+OSD (GPU-BP path, run on CPU here) must give sane logical predictions."""
     from qechybrid.decoders import DemBpOsd

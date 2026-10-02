@@ -2,6 +2,11 @@
 
 Chronological record of the Colab T4 runs. `1.58x` etc. are throughput ratios (GPU shots/s ÷ CPU-baseline shots/s on the same shots; below 1 means the GPU was slower), see `docs/METHODOLOGY.md`. The README keeps only the current picture.
 
+These historical timings predate the corrected protocol: surface used best-of-two,
+qLDPC used one repetition, and CPU-only surface modes synchronized CUDA in GPU runs.
+The CSVs are preserved as collected; marginal surface ratios need a corrected T4
+rerun. New local validation and measurements are documented in [VALIDATION.md](VALIDATION.md).
+
 
 ## Colab T4, run 1 (old code; notes in `docs/runs/colab-gpu-run1.md`)
 * **Surface code:** the first GPU pre-decoder gave throughput ratios of at most 1.25x (d=5, p=0.002); from d=9 it resolved ~0 shots, with a ratio near 1; at some points it added logical errors (d=7, p=0.002: 3.75e-4 vs 2.5e-4).
@@ -18,11 +23,11 @@ At d=9, p=0.003 (20k shots, NVIDIA's circuit), the trained Ising model left 2.9 
 with 26 vs 22 logical errors in the respective runs (no statistical comparison was made). Our first local rule left about 48 % of the weight (36 logical errors in its run).
 The run's stage-1 time (15.6 s) included torch.compile warm-up and is not a valid speed measurement; the adapter has since been changed (warm-up outside the timed region, fixed 2,048-shot chunks).
 
-## Colab T4, run 3: current code, quick profile (20k shots; `results/colab-gpu-quick/`, table in [docs/RESULTS_colab-gpu-quick.md](docs/RESULTS_colab-gpu-quick.md))
+## Colab T4, run 3: historical radius-1/2 code, quick profile (20k shots; `results/colab-gpu-quick/`, table in [docs/RESULTS_colab-gpu-quick.md](docs/RESULTS_colab-gpu-quick.md))
 
 | rule | throughput ratio vs PyMatching | logical errors (ours / PyMatching) | stage 1 per 20k shots |
 |---|---|---|---|
-| safe, radius 2 (no extra errors observed in our tests) | 1.08x - 1.32x (4 of 4 points) | 27/27, 155/155, 5/5, 72/71 | 3-8 ms |
+| conservative, radius 2 (one extra error at one point) | 1.08x - 1.32x (4 of 4 points) | 27/27, 155/155, 5/5, 72/71 | 3-8 ms |
 | fast, radius 1 | 0.90x - 2.53x (3 of 4 points above 1.02x) | 27/27, 158/155, 5/5, 80/71 | 3-7 ms |
 
 * Stage 1 took about 2-4x less time per 20k shots than in run 2 (the rule also changed, so the ratios are not attributable to one cause).
@@ -32,7 +37,7 @@ The run's stage-1 time (15.6 s) included torch.compile warm-up and is not a vali
   the traceback of the failed run was not captured, so this is a hardening, not a confirmed diagnosis.
 
 ## What changed along the way
-* **Accuracy fix found on CPU:** requiring that nothing else fired within two hops of an isolated pair (`radius=2`, now the default) removed the extra logical errors in our CPU tests
+* **Accuracy improvement found on CPU:** requiring that nothing else fired within two hops of an isolated pair (`radius=2`, now the default) reduced the extra logical errors in our CPU tests
   (d=9, p=0.004: 449 vs 448 baseline errors; d=7, p=0.002: 52 vs 52, 200k shots each); the PyMatching stage then ran 1.1-1.3x faster instead of 1.4-1.7x. The aggressive rule is kept as `radius=1`.
 * **Stage 1 on the GPU:** 1-byte uploads widened on the device, fp16 matrix products (the counts are small integers, representable in fp16), host-side bookkeeping outside the timed region; the GPU code path is unit-tested for equality with the CPU path.
 
