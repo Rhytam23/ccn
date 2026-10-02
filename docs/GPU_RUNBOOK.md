@@ -1,7 +1,7 @@
 # GPU runbook (Google Colab, free tier)
 
 1. **Push the repo** to a public GitHub repository (see `PUBLISHING.md`).
-2. Colab > *File > Open notebook > GitHub* > your repo > `notebooks/01_run_benchmarks_colab.ipynb`.
+2. Colab > *File > Open notebook > GitHub* > your repo > `notebooks/04_run_everything_colab.ipynb` (runs every step below; `00`-`03` are single-step subsets).
 3. *Runtime > Change runtime type > T4 GPU*. Edit `GITHUB_REPO` in the first cell.
 4. *Runtime > Run all*. Time: ~5 min with `--profile quick`, ~20-40 min with `full` (edit the benchmark cell).
 5. The last cell downloads `results_colab.zip`. Unzip into the repo (`results/colab-gpu/`), then locally:
@@ -10,10 +10,10 @@
    git add results docs && git commit -m "Add Colab GPU results" && git push
    ```
 
-## NVIDIA Ising head-to-head (notebook 03)
+## NVIDIA Ising head-to-head (a step of notebook 04; also notebook 03 alone)
 1. On Hugging Face, open `nvidia/ising_decoder_surface_code_1_fast`, accept the terms, create a **read** token.
 2. In Colab, add it as a secret named `HF_TOKEN` (key icon, notebook access on). Never paste it into a cell or commit it.
-3. Run notebook 03. NVIDIA validates the model for d >= 9, so the default distances are 9 and 13.
+3. Run notebook 04 (or 03). NVIDIA validates the model for d >= 9, so the default distances are 9 and 13.
 4. Without the token, `scripts/run_ising_bench.py` still runs with random weights: useful only to check plumbing and timing (rows are labelled and the LER is meaningless).
 
 ## Full pipeline (AI pre-decoder + GPU decoder vs CPU baselines)

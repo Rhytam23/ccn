@@ -3,7 +3,7 @@
 **Measured on Tesla T4 (Google Colab, 2 vCPU), `full` profile, 200,000 surface-code shots and 20,000 qLDPC shots per point; data: `results/colab-gpu/`.**
 
 * **qLDPC (BB codes, code-capacity noise): 0.98x to 1.58x batch throughput** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x), with **identical logical error counts at every point**.
-* **Surface code (circuit-level noise): 0.62x to 1.19x end-to-end** (4 of 12 points above 1.02x; best: d=5, p=0.002, 1.19x). The GPU pre-decoder makes the PyMatching stage itself 1.3x to 3.2x faster, but at d>=7 the first-stage cost cancels most of that gain.
+* **Surface code (circuit-level noise), first aggressive radius-1 local rule: 0.62x to 1.19x end-to-end** (4 of 12 points above 1.02x; best: d=5, p=0.002, 1.19x). The GPU pre-decoder makes the PyMatching stage itself 1.3x to 3.2x faster, but at d>=7 the first-stage cost cancels most of that gain.
 
 ## qLDPC: GPU batched BP vs C++ ldpc
 
@@ -16,7 +16,7 @@
 | BB[[144,12,12]] | 0.04 | 19,885 | 24,982 | **1.26x** | 233 / 233 |
 | BB[[144,12,12]] | 0.06 | 7,627 | 7,853 | **1.03x** | 1772 / 1772 |
 
-## Surface code: GPU local pre-decoder + PyMatching vs PyMatching alone
+## Surface code: GPU local pre-decoder (first, aggressive radius-1 rule) + PyMatching vs PyMatching alone
 
 | d | p | PyMatching (shots/s) | GPU pre-decoder + PyMatching (shots/s) | end-to-end | PyMatching stage only | logical errors (ours / PyMatching) | syndrome weight left |
 |---|---|---|---|---|---|---|---|

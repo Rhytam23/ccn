@@ -102,7 +102,7 @@ function render(){
     const qr = Q0.filter(r=>r.decoder.startsWith("GPU")).map(r=>({k:r.code+" p="+r.p, x:r.throughput_sps/bq[r.code+"|"+r.p].throughput_sps, e:r.errors, eb:bq[r.code+"|"+r.p].errors}));
     const tbl = (title, rs) => rs.length ? "<p><b>"+title+"</b>: "+Math.min(...rs.map(r=>r.x)).toFixed(2)+"x to "+Math.max(...rs.map(r=>r.x)).toFixed(2)+"x</p><table><tr><th>case</th><th>speed-up</th><th>errors (ours / baseline)</th></tr>"+
       rs.map(r=>`<tr><td>${r.k}</td><td>${r.x.toFixed(2)}x</td><td>${r.e} / ${r.eb}</td></tr>`).join("")+"</table>" : "";
-    $("sum_body").innerHTML = tbl("qLDPC: GPU batched BP vs C++ ldpc", qr) + tbl("Surface code: GPU pre-decoder + PyMatching vs PyMatching", sr);
+    $("sum_body").innerHTML = tbl("qLDPC: GPU batched BP vs C++ ldpc", qr) + tbl("Surface code: GPU pre-decoder + PyMatching vs PyMatching" + (S.some(r=>r.decoder.includes("(safe")) ? "" : " (first, aggressive radius-1 rule)"), sr);
   })();
   const ds = [...new Set(S.map(r=>r.d))]; if(!$("d").options.length) ds.forEach(d=>$("d").add(new Option("d="+d, d)));
   const d = +$("d").value || ds[0];

@@ -59,7 +59,7 @@ head = (
     f"data: `results/{tag}/`.**\n\n"
     f"* **qLDPC (BB codes, code-capacity noise): {lo_q:.2f}x to {hi_q:.2f}x batch throughput** vs the C++ `ldpc` BP+OSD "
     f"(best: {best_q[0]}, p={best_q[1]}, {best_q[4]:.2f}x), with **identical logical error counts at every point**.\n"
-    f"* **Surface code (circuit-level noise): {lo_s:.2f}x to {hi_s:.2f}x end-to-end** ({wins_s} of {len(rows)} points above 1.02x; best: d={best_s[0]}, p={best_s[1]}, {best_s[4]:.2f}x). "
+    f"* **Surface code (circuit-level noise), first aggressive radius-1 local rule: {lo_s:.2f}x to {hi_s:.2f}x end-to-end** ({wins_s} of {len(rows)} points above 1.02x; best: d={best_s[0]}, p={best_s[1]}, {best_s[4]:.2f}x). "
     f"The GPU pre-decoder makes the PyMatching stage itself {min(r[5] for r in rows):.1f}x to {max(r[5] for r in rows):.1f}x faster, "
     f"but at d>=7 the first-stage cost cancels most of that gain.\n"
 )
@@ -70,7 +70,7 @@ caveat = (
 )
 md = (
     f"# GPU speed-up results ({gpu})\n\n{head}\n## qLDPC: GPU batched BP vs C++ ldpc\n\n{qt}\n"
-    f"## Surface code: GPU local pre-decoder + PyMatching vs PyMatching alone\n\n{sur}\n{caveat}"
+    f"## Surface code: GPU local pre-decoder (first, aggressive radius-1 rule) + PyMatching vs PyMatching alone\n\n{sur}\n{caveat}"
 )
 (ROOT / "docs" / "RESULTS.md").write_text(md, encoding="utf-8")
 

@@ -21,7 +21,7 @@ Stim syndromes ──► [GPU] pre-decoder ──► empty residual? ──yes�
 **Measured on Tesla T4 (Google Colab, 2 vCPU), `full` profile, 200,000 surface-code shots and 20,000 qLDPC shots per point; data: `results/colab-gpu/`.**
 
 * **qLDPC (BB codes, code-capacity noise): 0.98x to 1.58x batch throughput** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x), with **identical logical error counts at every point**.
-* **Surface code (circuit-level noise): 0.62x to 1.19x end-to-end** (4 of 12 points above 1.02x; best: d=5, p=0.002, 1.19x). The GPU pre-decoder makes the PyMatching stage itself 1.3x to 3.2x faster, but at d>=7 the first-stage cost cancels most of that gain.
+* **Surface code (circuit-level noise), first aggressive radius-1 local rule: 0.62x to 1.19x end-to-end** (4 of 12 points above 1.02x; best: d=5, p=0.002, 1.19x). The GPU pre-decoder makes the PyMatching stage itself 1.3x to 3.2x faster, but at d>=7 the first-stage cost cancels most of that gain.
 
 | code | p | C++ ldpc BP+OSD (shots/s) | GPU BP + OSD fallback (shots/s) | speed-up | logical errors (GPU / ldpc) |
 |---|---|---|---|---|---|
@@ -42,14 +42,15 @@ Full tables: [docs/RESULTS.md](docs/RESULTS.md).
 | Piece | File | Status |
 |---|---|---|
 | Circuit-level surface-code data + detector error model (Stim) | `src/qechybrid/data.py` | tested |
-| **Local GPU pre-decoder** (clique-style heuristic: clears isolated fault pairs with matrix ops; NOT provably MWPM-equivalent) | `local_predecoder.py` | tested on CPU; CUDA path written, **run it on Colab to confirm** |
-| **Learned gate** (small MLP with a *calibrated* confidence threshold so it adds ~no logical errors) | `gate.py` | tested |
+| **Local GPU pre-decoder** (clique-style heuristic: clears isolated fault pairs with matrix ops; NOT provably MWPM-equivalent) | `local_predecoder.py` | unit-tested; the **first (aggressive, radius-1) version ran on a T4** (results above); the lossless `radius=2` rule and fp16 stage 1 are CPU-verified, **not yet measured on a GPU** |
+| **Learned gate** (small MLP; confidence threshold calibrated to bound extra logical errors) | `gate.py` | tested; **negative result**: accepts almost no shots beyond d=5, kept as an ablation |
 | Hybrid pipeline + trivial non-AI baseline | `pipeline.py` | tested |
-| **Batched min-sum BP in PyTorch** (CUDA/CPU) with BP+OSD fallback for non-converged shots | `bp_gpu.py`, `decoders.py` | tested on CPU (matches ldpc LER); CUDA path to confirm on Colab |
+| **Batched min-sum BP in PyTorch** (CUDA/CPU) with BP+OSD fallback for non-converged shots | `bp_gpu.py`, `decoders.py` | unit-tested against a dense reference; **measured on a T4: identical logical errors to `ldpc`, 0.98-1.58x batch throughput** |
 | Bivariate-bicycle qLDPC codes [[72,12,6]], [[144,12,12]], exact logical-failure check over GF(2) | `codes.py`, `gf2.py` | tested |
-| Optional NVIDIA **CUDA-Q QEC** `nv-qldpc-decoder` backend | `cudaq_qec_adapter.py` | **unverified** (written from public docs; needs Colab GPU) |
-| **Head-to-head with NVIDIA's Ising 3D-CNN pre-decoder** on identical shots (NVIDIA's circuit + noise model): PyMatching vs Ising+PyMatching vs ours | `ising_adapter.py`, `scripts/run_ising_bench.py`, `notebooks/03_ising_head_to_head.ipynb` | wiring follows NVIDIA's cookbook and is **verified locally with random weights** (plumbing/timing only); **trained-weights numbers pending**: weights are gated on Hugging Face and need your own token |
-| Benchmark harness (LER with Wilson CIs, throughput, p50/p95/p99 single-shot latency) | `bench.py`, `scripts/run_benchmarks.py` | tested |
+| Optional NVIDIA **CUDA-Q QEC** `nv-qldpc-decoder` backend | `cudaq_qec_adapter.py` | **unverified**: written from public docs; `cudaq-qec` was not installed on the Colab runs |
+| **Head-to-head with NVIDIA's Ising 3D-CNN pre-decoder** on identical shots (NVIDIA's circuit + noise model): PyMatching vs Ising+PyMatching vs ours | `ising_adapter.py`, `scripts/run_ising_bench.py` | ran with **trained weights on a T4 for one case** (d=9, p=0.003; syndrome weight left 2.9 %); its timing was a warm-up artifact, now fixed; **valid timings and more cases pending** |
+| **Full pipeline: Ising (GPU) -> GPU BP(+OSD) vs CPU baselines** (total time + logical errors) | `ising_adapter.run_full_pipeline`, `decoders.DemBpOsd`, `scripts/run_full_pipeline.py` | plumbing verified on CPU with random weights; **no trained-weights results yet** |
+| Benchmark harness (LER with Wilson CIs, throughput, p50/p95/p99 single-shot latency, 256-shot micro-batch latency) | `bench.py`, `scripts/run_benchmarks.py` | tested |
 | Interactive results website (GitHub Pages ready) | `docs/index.html` (built by `scripts/make_report.py`) | working |
 
 ## What is ours, what is not, and what we claim
@@ -63,8 +64,8 @@ Full tables: [docs/RESULTS.md](docs/RESULTS.md).
 * the reproducible Colab notebooks and results site.
 
 **What we claim (and only this):**
-1. GPU BP matches `ldpc`'s logical error counts exactly and gives 1.0-1.6x batch throughput on a T4 (qLDPC, code-capacity noise).
-2. A classical local pre-decoder can be made lossless but only speeds the global decoder up ~1.1-1.3x; the end-to-end surface-code gain from our own rule is about 1x on a T4.
+1. GPU BP matches `ldpc`'s logical error counts exactly and gives 0.98-1.58x batch throughput on a T4 (qLDPC, code-capacity noise; best case [[144,12,12]] at p=0.02).
+2. A classical local pre-decoder can be made lossless (CPU-verified `radius=2`) but then only speeds the global decoder up ~1.1-1.3x. The only surface-code GPU result so far is for the **first, aggressive radius-1 rule**: 0.62-1.19x end-to-end on a T4 and extra logical errors at some points, so no surface-code speed-up from our own rule is claimed.
 3. NVIDIA's trained Ising model leaves ~3 % of the syndrome at d=9 (one measured case so far); its end-to-end timing is pending a valid re-run.
 
 **What we do not claim:** a real-time (single-shot, microsecond) GPU advantage: on the T4 the GPU paths lose at batch size 1. No surface-code speed-up from our own rule beyond ~1.3x, and no Ising or full-pipeline speed-up until `results/colab-ising/` and `results/colab-pipeline/` exist.
@@ -99,11 +100,19 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: create
 
 ## GPU run (free: Google Colab T4)
 
-1. Push this repo to a **public** GitHub repository.
-2. Open `notebooks/01_run_benchmarks_colab.ipynb` in Colab (set the runtime to a T4 GPU, set `GITHUB_REPO` in the first cell) and run all.
-3. Download the zip, copy `results/colab-gpu/` into the repo, run `python scripts/make_report.py`, commit, and enable **GitHub Pages** (Settings > Pages > `main` / `docs`).
-   The same page then shows CPU and GPU runs side by side via the run selector.
-4. Optional: `02_cudaq_qec_bposd.ipynb` (NVIDIA GPU BP+OSD) and `03_ising_head_to_head.ipynb` (real NVIDIA Ising model vs ours; needs a free Hugging Face account, acceptance of the model terms, and a read token stored as the Colab secret `HF_TOKEN`).
+**Use one notebook: `notebooks/04_run_everything_colab.ipynb`.** It runs everything below in order with *Runtime > Run all*.
+
+| notebook | purpose |
+|---|---|
+| **`04_run_everything_colab`** | **setup check, tests, surface + qLDPC benchmarks, Ising head-to-head, full pipeline, report + zip (use this one)** |
+| `00_setup_check_colab` | subset: GPU/install/tests only |
+| `01_run_benchmarks_colab` | subset: surface + qLDPC benchmarks only |
+| `02_cudaq_qec_bposd` | subset: optional CUDA-Q QEC backend (unverified) |
+| `03_ising_head_to_head` | subset: Ising comparison only (does not include the full pipeline) |
+
+1. Push this repo to a **public** GitHub repository and open notebook 04 from GitHub in Colab (runtime: an NVIDIA GPU; set `GITHUB_REPO` and `PROFILE` in the first cell).
+2. For the Ising and full-pipeline steps you need a free Hugging Face account, acceptance of the model terms, and a *read* token stored as the Colab secret `HF_TOKEN` (never paste it into a cell). Without it those steps are skipped.
+3. Download the zip, copy the `results/colab-*` folders into the repo, run `python scripts/make_report.py` and `python scripts/make_summary.py`, commit, and enable **GitHub Pages** (Settings > Pages > `main` / `docs`).
 
 ## Honest results so far
 
@@ -119,6 +128,7 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: create
 | code | p | GPU hybrid vs C++ ldpc (shots/s) | logical errors (GPU / ldpc) |
 |---|---|---|---|
 | [[72,12,6]] | 0.02 | 86k vs 78k = 1.11x | 226 / 226 |
+| [[72,12,6]] | 0.04 | 39k vs 40k = 0.98x (slightly slower) | 1770 / 1770 |
 | [[72,12,6]] | 0.06 | 21k vs 19k = 1.12x | 4991 / 4991 |
 | [[144,12,12]] | 0.02 | 62k vs 39k = **1.58x** | 13 / 13 |
 | [[144,12,12]] | 0.04 | 25k vs 20k = 1.26x | 233 / 233 |
