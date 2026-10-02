@@ -7,7 +7,7 @@ OUT = Path(__file__).resolve().parent.parent / "notebooks"
 OUT.mkdir(exist_ok=True)
 
 SETUP = '''# ---- edit this: your public GitHub repo ----
-GITHUB_REPO = "GITHUB_USER/qechybrid"
+GITHUB_REPO = "Rhytam23/ccn"
 import os, subprocess, sys
 if not os.path.exists("/content/repo"):
     subprocess.run(["git", "clone", "--depth", "1", f"https://github.com/{GITHUB_REPO}.git", "/content/repo"], check=True)
