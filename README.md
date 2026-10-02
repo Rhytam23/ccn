@@ -21,7 +21,8 @@ Stim syndromes ──► [GPU] pre-decoder ──► empty residual? ──yes�
 **Measured on Tesla T4 (Google Colab, 2 vCPU), `full` profile, 200,000 surface-code shots and 20,000 qLDPC shots per point; data: `results/colab-gpu/`.**
 
 * **qLDPC (BB codes, code-capacity noise): 0.98x to 1.58x batch throughput** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x), with **identical logical error counts at every point**.
-* **Surface code (circuit-level noise), first aggressive radius-1 local rule: 0.62x to 1.19x end-to-end** (4 of 12 points above 1.02x; best: d=5, p=0.002, 1.19x). The GPU pre-decoder makes the PyMatching stage itself 1.3x to 3.2x faster, but at d>=7 the first-stage cost cancels most of that gain.
+* **Surface code (circuit-level noise), first version (r=1) rule: 0.62x to 1.19x end-to-end** (4 of 12 points above 1.02x; 344 extra logical errors in total vs PyMatching).
+* Best single surface-code point: first version (r=1) rule, d=5, p=0.002, 1.19x.
 
 | code | p | C++ ldpc BP+OSD (shots/s) | GPU BP + OSD fallback (shots/s) | speed-up | logical errors (GPU / ldpc) |
 |---|---|---|---|---|---|
@@ -32,7 +33,7 @@ Stim syndromes ──► [GPU] pre-decoder ──► empty residual? ──yes�
 | BB[[144,12,12]] | 0.04 | 19,885 | 24,982 | **1.26x** | 233 / 233 |
 | BB[[144,12,12]] | 0.06 | 7,627 | 7,853 | **1.03x** | 1772 / 1772 |
 
-Caveats: batch throughput only (single-shot latency is worse on the GPU than on the CPU); the surface-code rows are for the first, aggressive local rule, which also adds logical errors at some points (compare the error columns); the faster fp16 stage 1 and the lossless `radius=2` rule are CPU-verified and not yet re-measured on the GPU. Speed-ups are relative to CPU baselines on the same Colab machine.
+Caveats: batch throughput only (single-shot latency is worse on the GPU than on the CPU); the surface-code rows are for the first, aggressive local rule, which also adds logical errors at some points (compare the error columns); the faster fp16 stage 1 and the lossless `radius=2` rule were not part of this run. Speed-ups are relative to CPU baselines on the same Colab machine.
 
 Full tables: [docs/RESULTS.md](docs/RESULTS.md).
 <!-- RESULTS:END -->
@@ -42,7 +43,7 @@ Full tables: [docs/RESULTS.md](docs/RESULTS.md).
 | Piece | File | Status |
 |---|---|---|
 | Circuit-level surface-code data + detector error model (Stim) | `src/qechybrid/data.py` | tested |
-| **Local GPU pre-decoder** (clique-style heuristic: clears isolated fault pairs with matrix ops; NOT provably MWPM-equivalent) | `local_predecoder.py` | unit-tested; the **first (aggressive, radius-1) version ran on a T4** (results above); the lossless `radius=2` rule and fp16 stage 1 are CPU-verified, **not yet measured on a GPU** |
+| **Local GPU pre-decoder** (clique-style heuristic: clears isolated fault pairs with matrix ops; NOT provably MWPM-equivalent) | `local_predecoder.py` | unit-tested; **measured on a T4** in two versions: the first (aggressive radius-1) rule on 200k shots, and the current fp16 stage 1 with the lossless `radius=2` and the fast `radius=1` rules on 20k shots (run 3, quick profile only: d=5 and 7) |
 | **Learned gate** (small MLP; confidence threshold calibrated to bound extra logical errors) | `gate.py` | tested; **negative result**: accepts almost no shots beyond d=5, kept as an ablation |
 | Hybrid pipeline + trivial non-AI baseline | `pipeline.py` | tested |
 | **Batched min-sum BP in PyTorch** (CUDA/CPU) with BP+OSD fallback for non-converged shots | `bp_gpu.py`, `decoders.py` | unit-tested against a dense reference; **measured on a T4: identical logical errors to `ldpc`, 0.98-1.58x batch throughput** |
@@ -65,7 +66,7 @@ Full tables: [docs/RESULTS.md](docs/RESULTS.md).
 
 **What we claim (and only this):**
 1. GPU BP matches `ldpc`'s logical error counts exactly and gives 0.98-1.58x batch throughput on a T4 (qLDPC, code-capacity noise; best case [[144,12,12]] at p=0.02).
-2. A classical local pre-decoder can be made lossless (CPU-verified `radius=2`) but then only speeds the global decoder up ~1.1-1.3x. The only surface-code GPU result so far is for the **first, aggressive radius-1 rule**: 0.62-1.19x end-to-end on a T4 and extra logical errors at some points, so no surface-code speed-up from our own rule is claimed.
+2. On a T4 (run 3, quick profile, d=5 and 7, 20k shots), our lossless `radius=2` local pre-decoder gives **1.08-1.32x end-to-end** with the same logical error counts as PyMatching; the faster `radius=1` rule gives up to **2.53x** (d=7, p=0.002) but costs extra logical errors at p=0.004 (80 vs 71). This is a small, quick-profile result (low error counts, d<=7); the earlier full run used the first aggressive rule and a slow stage 1 (0.62-1.19x). Run the `full` profile to extend it to d=9 and 13.
 3. NVIDIA's trained Ising model leaves ~3 % of the syndrome at d=9 (one measured case so far); its end-to-end timing is pending a valid re-run.
 
 **What we do not claim:** a real-time (single-shot, microsecond) GPU advantage: on the T4 the GPU paths lose at batch size 1. No surface-code speed-up from our own rule beyond ~1.3x, and no Ising or full-pipeline speed-up until `results/colab-ising/` and `results/colab-pipeline/` exist.
@@ -145,12 +146,22 @@ At d=9, p=0.003 (20k shots, NVIDIA's circuit) the trained Ising model leaves onl
 (0.10 s vs 0.39 s) at a similar error count (26 vs 22). Our classical local rule keeps ~48 % of the weight. The run's stage-1 time (15.6 s) is a torch.compile warm-up artifact, now fixed in the adapter,
 so **no Ising end-to-end speed-up is claimed yet**: rerun notebook 04 to get a valid timing and the missing cases.
 
-### What changed after run 2 (CPU-verified, GPU not yet re-measured)
+### Colab T4, run 3: current code, quick profile (20k shots; data in `results/colab-gpu-quick/`, table in `docs/RESULTS_colab-gpu-quick.md`)
+| rule | end-to-end vs PyMatching | logical errors vs PyMatching | stage 1 (20k shots) |
+|---|---|---|---|
+| **safe, radius 2 (lossless)** | **1.08x - 1.32x** (4 of 4 points) | 27/27, 155/155, 5/5, 72/71 | 3-8 ms |
+| fast, radius 1 | 0.90x - **2.53x** (3 of 4 points above 1.02x) | 27/27, 158/155, 5/5, 80/71 | 3-7 ms |
+
+* The fp16 stage 1 is ~3-4x cheaper than in run 2, which is why the end-to-end numbers moved from ~1x or below to above 1x for d>=7.
+* Caveats: only d=5 and 7; at 256-shot micro-batches the GPU paths are still *slower* than the CPU (e.g. 1.2-3.2 ms vs 0.6-2.5 ms for the surface code, 49-74 ms vs 3-6 ms for qLDPC); the quick profile's 1,000-shot qLDPC runs are too small to load the GPU (0.18-0.22x), so use the 20,000-shot full run above for qLDPC.
+* In this run the Ising and full-pipeline steps wrote only `meta.json` and no results: every case failed. The adapter now runs NVIDIA's pipeline in fixed 2,048-shot chunks (one compile, bounded GPU memory) and frees memory between cases; the traceback from the failed run was not captured, so this fix is a hardening, not a confirmed diagnosis.
+
+### What changed after run 2 (history)
 * **Accuracy fix found on CPU:** requiring that *nothing else fired within two hops* of an isolated pair (`radius=2`, now the default) removes the extra logical errors entirely
   (d=9, p=0.004: 449 vs 448 baseline errors; d=7, p=0.002: 52 vs 52, 200k shots each) at the price of a smaller speed-up for the global decoder (1.1-1.3x instead of 1.4-1.7x).
   The aggressive rule is kept as `radius=1` ("fast"), so the benchmark now reports both: a lossless dial and a faster-but-lossy one.
 * **Stage 1 made cheap on the GPU:** 1-byte uploads widened on the device, fp16 matrix products on tensor cores (exact for these small integer counts), and host-side
-  bookkeeping moved out of the timed region. The GPU code path is unit-tested for equality with the CPU path (in fp32). **Run notebook 04 again to measure it.**
+  bookkeeping moved out of the timed region. The GPU code path is unit-tested for equality with the CPU path (in fp32) and was measured in run 3 (above).
 * **Honest expectation:** with radius-2 the safe rule makes the PyMatching stage only ~1.1-1.3x faster, so even a free stage 1 gives about that much end-to-end. A larger surface-code gain
   needs a stronger pre-decoder, which is what the NVIDIA Ising comparison (notebook 04, needs the Hugging Face token) is for. It has not produced results yet.
 

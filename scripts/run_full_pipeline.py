@@ -46,6 +46,7 @@ for d in a.distances:
             print(f"!! case d={d} p={p} failed:")
             traceback.print_exc()
         finally:
+            ctx = None
             gc.collect()
             if device.startswith("cuda"):
                 import torch

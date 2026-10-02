@@ -112,6 +112,37 @@ def build_context(repo, distance=9, n_rounds=None, p=0.005, shots=5000, basis="X
                            p=p, trained=bool(weights), model_id=model_id, shots=shots)
 
 
+CHUNK = 2048  # fixed batch shape: one compile, bounded activation memory
+
+
+def ising_forward(ctx, det_u8, chunk: int = CHUNK):
+    """Run NVIDIA's pipeline over `det_u8` (numpy uint8 [n, N]) in fixed-size chunks.
+
+    Every call uses exactly `chunk` rows (the last chunk is zero-padded and sliced back), so torch.compile
+    sees a single shape and a 20k-shot batch cannot exhaust GPU memory in one pass.
+    Returns the pipeline output [n, 1+N] as a tensor on the device; time it with a device sync around the call.
+    """
+    import torch
+
+    n = len(det_u8)
+    chunk = min(chunk, n)  # small batches use their own (single) shape; no padding
+    outs = []
+    with torch.no_grad():
+        for i in range(0, n, chunk):
+            x = torch.from_numpy(np.ascontiguousarray(det_u8[i : i + chunk])).to(torch.uint8)
+            m = x.shape[0]
+            if m < chunk:
+                x = torch.cat([x, torch.zeros(chunk - m, x.shape[1], dtype=torch.uint8)])
+            outs.append(ctx.pipe(x.to(ctx.device))[:m])
+    return torch.cat(outs)
+
+
+def ising_warmup(ctx, det_u8, chunk: int = CHUNK):
+    chunk = min(chunk, len(det_u8))
+    ising_forward(ctx, det_u8[:chunk], chunk)
+    ising_forward(ctx, det_u8[:chunk], chunk)
+
+
 def run_comparison(ctx, lat_shots: int = 200, log=print) -> list[dict]:
     """Rows (same schema as the surface benchmark) for PyMatching, NVIDIA Ising + PyMatching, our local pre-decoder."""
     import torch
@@ -159,15 +190,9 @@ def run_comparison(ctx, lat_shots: int = 200, log=print) -> list[dict]:
     rows.append(row("pymatching (CPU)", int((pm != obs).sum()), n / t_pm, lat_of(lambda x: m.decode(x)), 0.0, 1.0, 0.0, t_pm))
 
     # 2) NVIDIA Ising + PyMatching
-    dt = torch.from_numpy(det).to(torch.uint8).to(dev)
-    with torch.no_grad():
-        # Warm up with the full batch shape: NVIDIA's pipeline is torch.compile'd and re-specialises for every
-        # new batch shape, so a smaller warm-up batch would put JIT compilation inside the timed region.
-        ctx.pipe(dt)
-        ctx.pipe(dt)
+    ising_warmup(ctx, det)  # compile once for the fixed chunk shape (outside the timed region)
     t0 = now(dev)
-    with torch.no_grad():
-        out = ctx.pipe(dt)
+    out = ising_forward(ctx, det)
     t_pd = now(dev) - t0
     flip = out[:, 0].cpu().numpy().astype(np.uint8)
     res = out[:, 1:].cpu().numpy().astype(np.uint8)
@@ -247,13 +272,9 @@ def run_full_pipeline(ctx, cpu_shots: int = 1000, max_iter: int = 30, log=print)
         log(f"  CPU BP+OSD failed: {type(exc).__name__}: {exc}")
 
     # --- Ising stage 1 (GPU), timed once on the full batch; reused by the three AI rows ---
-    dt = torch.from_numpy(det).to(torch.uint8).to(dev)
-    with torch.no_grad():
-        ctx.pipe(dt)  # warm up on the full batch shape (torch.compile specialises on shape)
-        ctx.pipe(dt)
+    ising_warmup(ctx, det)  # compile once for the fixed chunk shape (outside the timed region)
     t0 = now(dev)
-    with torch.no_grad():
-        out = ctx.pipe(dt)
+    out = ising_forward(ctx, det)
     t_pd = now(dev) - t0
     flip_t = out[:, 0].round().to(torch.uint8)
     res_t = out[:, 1:].round().to(torch.uint8)

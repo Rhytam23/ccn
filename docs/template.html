@@ -97,7 +97,7 @@ function render(){
     if(!isGpu) return;
     $("sum_title").textContent = "GPU speed-up summary - " + m.gpu + " (" + (m.profile||"?") + " profile)";
     const bs = Object.fromEntries(S.filter(r=>r.decoder==="pymatching (CPU)").map(r=>[r.d+"|"+r.p, r]));
-    const sr = S.filter(r=>r.decoder.startsWith("GPU local pre-decoder")).map(r=>({k:"d="+r.d+" p="+r.p, x:r.throughput_sps/bs[r.d+"|"+r.p].throughput_sps, e:r.errors, eb:bs[r.d+"|"+r.p].errors}));
+    const sr = S.filter(r=>r.decoder.startsWith("GPU local pre-decoder")).map(r=>({k:"d="+r.d+" p="+r.p+(r.decoder.includes("(safe")?" [safe r=2]":r.decoder.includes("(fast")?" [fast r=1]":""), x:r.throughput_sps/bs[r.d+"|"+r.p].throughput_sps, e:r.errors, eb:bs[r.d+"|"+r.p].errors}));
     const bq = Object.fromEntries(Q0.filter(r=>r.decoder.includes("ldpc BP")).map(r=>[r.code+"|"+r.p, r]));
     const qr = Q0.filter(r=>r.decoder.startsWith("GPU")).map(r=>({k:r.code+" p="+r.p, x:r.throughput_sps/bq[r.code+"|"+r.p].throughput_sps, e:r.errors, eb:bq[r.code+"|"+r.p].errors}));
     const tbl = (title, rs) => rs.length ? "<p><b>"+title+"</b>: "+Math.min(...rs.map(r=>r.x)).toFixed(2)+"x to "+Math.max(...rs.map(r=>r.x)).toFixed(2)+"x</p><table><tr><th>case</th><th>speed-up</th><th>errors (ours / baseline)</th></tr>"+

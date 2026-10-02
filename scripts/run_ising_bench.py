@@ -50,6 +50,7 @@ for d in a.distances:
         finally:
             import gc
 
+            ctx = None
             gc.collect()
             if device.startswith("cuda"):
                 import torch
