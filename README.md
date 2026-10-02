@@ -15,6 +15,28 @@ Stim syndromes ──► [GPU] pre-decoder ──► empty residual? ──yes�
                                             BP+OSD (ldpc on CPU, or CUDA-Q QEC on GPU)
 ```
 
+<!-- RESULTS:START -->
+### GPU speed-up results (Tesla T4)
+
+**Measured on Tesla T4 (Google Colab, 2 vCPU), `full` profile, 200,000 surface-code shots and 20,000 qLDPC shots per point; data: `results/colab-gpu/`.**
+
+* **qLDPC (BB codes, code-capacity noise): 0.98x to 1.58x batch throughput** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x), with **identical logical error counts at every point**.
+* **Surface code (circuit-level noise): 0.62x to 1.19x end-to-end** (4 of 12 points above 1.02x; best: d=5, p=0.002, 1.19x). The GPU pre-decoder makes the PyMatching stage itself 1.3x to 3.2x faster, but at d>=7 the first-stage cost cancels most of that gain.
+
+| code | p | C++ ldpc BP+OSD (shots/s) | GPU BP + OSD fallback (shots/s) | speed-up | logical errors (GPU / ldpc) |
+|---|---|---|---|---|---|
+| BB[[72,12,6]] | 0.02 | 77,638 | 86,407 | **1.11x** | 226 / 226 |
+| BB[[72,12,6]] | 0.04 | 39,769 | 38,941 | **0.98x** | 1770 / 1770 |
+| BB[[72,12,6]] | 0.06 | 18,921 | 21,240 | **1.12x** | 4991 / 4991 |
+| BB[[144,12,12]] | 0.02 | 39,426 | 62,340 | **1.58x** | 13 / 13 |
+| BB[[144,12,12]] | 0.04 | 19,885 | 24,982 | **1.26x** | 233 / 233 |
+| BB[[144,12,12]] | 0.06 | 7,627 | 7,853 | **1.03x** | 1772 / 1772 |
+
+Caveats: batch throughput only (single-shot latency is worse on the GPU than on the CPU); the surface-code rows are for the first, aggressive local rule, which also adds logical errors at some points (compare the error columns); the faster fp16 stage 1 and the lossless `radius=2` rule are CPU-verified and not yet re-measured on the GPU. Speed-ups are relative to CPU baselines on the same Colab machine.
+
+Full tables: [docs/RESULTS.md](docs/RESULTS.md).
+<!-- RESULTS:END -->
+
 ## What is in the repo
 
 | Piece | File | Status |

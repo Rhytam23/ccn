@@ -32,6 +32,7 @@
 </header>
 <main>
   <div class="warn note" id="honesty"></div>
+  <div class="card" id="summary" style="display:none"><b id="sum_title"></b><div id="sum_body"></div><div class="note">Speed-up = throughput relative to the CPU baseline measured in the same session. Batch throughput only; see the latency table for single-shot numbers. Rows below 1.00x are shown on purpose.</div></div>
 
   <h2>Surface code (circuit-level noise, Stim)</h2>
   <div class="card">Distance <select id="d"></select> <span class="note">Latency table and curves update with the selection.</span></div>
@@ -43,7 +44,16 @@
     <div class="card"><div id="spd"></div></div>
     <div class="card"><div id="acc"></div></div>
   </div>
+  <div class="row">
+    <div class="card"><div id="gt"></div><div class="note">Time spent in the exact global decoder (PyMatching) per batch, relative to decoding the raw syndromes. This part is hardware-independent evidence that pre-decoding makes the hard problem easier.</div></div>
+    <div class="card"><div id="wk"></div></div>
+  </div>
   <div class="card"><b>Single-shot latency (µs) &amp; throughput</b><div id="lat"></div></div>
+
+  <div id="ising_sec" style="display:none">
+    <h2>Head-to-head with NVIDIA Ising (same shots, NVIDIA circuit + noise model)</h2>
+    <div class="card"><div id="ising_tab"></div></div>
+  </div>
 
   <h2>qLDPC BP+OSD (bivariate-bicycle codes, code-capacity noise)</h2>
   <div class="row">
@@ -76,6 +86,19 @@ function render(){
   $("honesty").innerHTML = m.gpu ? "GPU run: numbers measured on <b>"+m.gpu+"</b>." :
     "<b>CPU-only run.</b> The GPU pre-decoder is running on CPU here, so it is <i>not</i> expected to beat PyMatching in this run. Re-run on a GPU (Colab) for the accelerated numbers.";
   const S = run.surface || [];
+  (function(){
+    const Q0 = run.qldpc || [], isGpu = !!m.gpu;
+    $("summary").style.display = isGpu && (S.length || Q0.length) ? "block" : "none";
+    if(!isGpu) return;
+    $("sum_title").textContent = "GPU speed-up summary - " + m.gpu + " (" + (m.profile||"?") + " profile)";
+    const bs = Object.fromEntries(S.filter(r=>r.decoder==="pymatching (CPU)").map(r=>[r.d+"|"+r.p, r]));
+    const sr = S.filter(r=>r.decoder.startsWith("GPU local pre-decoder")).map(r=>({k:"d="+r.d+" p="+r.p, x:r.throughput_sps/bs[r.d+"|"+r.p].throughput_sps, e:r.errors, eb:bs[r.d+"|"+r.p].errors}));
+    const bq = Object.fromEntries(Q0.filter(r=>r.decoder.includes("ldpc BP")).map(r=>[r.code+"|"+r.p, r]));
+    const qr = Q0.filter(r=>r.decoder.startsWith("GPU")).map(r=>({k:r.code+" p="+r.p, x:r.throughput_sps/bq[r.code+"|"+r.p].throughput_sps, e:r.errors, eb:bq[r.code+"|"+r.p].errors}));
+    const tbl = (title, rs) => rs.length ? "<p><b>"+title+"</b>: "+Math.min(...rs.map(r=>r.x)).toFixed(2)+"x to "+Math.max(...rs.map(r=>r.x)).toFixed(2)+"x</p><table><tr><th>case</th><th>speed-up</th><th>errors (ours / baseline)</th></tr>"+
+      rs.map(r=>`<tr><td>${r.k}</td><td>${r.x.toFixed(2)}x</td><td>${r.e} / ${r.eb}</td></tr>`).join("")+"</table>" : "";
+    $("sum_body").innerHTML = tbl("qLDPC: GPU batched BP vs C++ ldpc", qr) + tbl("Surface code: GPU pre-decoder + PyMatching vs PyMatching", sr);
+  })();
   const ds = [...new Set(S.map(r=>r.d))]; if(!$("d").options.length) ds.forEach(d=>$("d").add(new Option("d="+d, d)));
   const d = +$("d").value || ds[0];
   const rows = S.filter(r=>r.d===d), dec = groupBy(rows,"decoder");
