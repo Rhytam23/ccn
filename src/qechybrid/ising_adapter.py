@@ -25,18 +25,36 @@ import numpy as np
 
 from .timing import now, percentiles_us, wilson
 
+# Candidate repo ids per model (the current public names first, NVIDIA's older cookbook names as fallback).
 HF_REPOS = {
-    1: ("nvidia/ising_decoder_surface_code_1_fast", "ising_decoder_surface_code_1_fast_r9_v1.0.77_fp16.safetensors"),
-    2: ("nvidia/ising_decoder_surface_code_1_accurate", "ising_decoder_surface_code_1_accurate_r13_v1.0.86_fp16.safetensors"),
+    1: ["nvidia/Ising-Decoder-SurfaceCode-1-Fast", "nvidia/ising_decoder_surface_code_1_fast"],
+    2: ["nvidia/Ising-Decoder-SurfaceCode-1-Accurate", "nvidia/ising_decoder_surface_code_1_accurate"],
 }
 
 
 def download_weights(model_id: int = 1) -> str:
-    """Download gated weights using the caller's own HF credentials."""
-    from huggingface_hub import hf_hub_download
+    """Download the gated weights with the caller's own Hugging Face credentials.
 
-    repo, fname = HF_REPOS[model_id]
-    return hf_hub_download(repo_id=repo, filename=fname, token=os.environ.get("HF_TOKEN") or True)
+    Looks the .safetensors file up in the repo (so a version bump in the file name does not break us)
+    and prefers the fp16 checkpoint. The token is read from HF_TOKEN or a cached login and never printed.
+    """
+    from huggingface_hub import hf_hub_download, list_repo_files
+
+    token = os.environ.get("HF_TOKEN") or True
+    last = None
+    for repo in HF_REPOS[model_id]:
+        try:
+            files = [f for f in list_repo_files(repo, token=token) if f.endswith(".safetensors")]
+            if not files:
+                raise FileNotFoundError(f"no .safetensors file in {repo}")
+            fname = next((f for f in files if "fp16" in f), files[0])
+            return hf_hub_download(repo_id=repo, filename=fname, token=token)
+        except Exception as exc:  # try the next candidate name
+            last = exc
+    raise RuntimeError(
+        f"could not download Ising weights for model {model_id} (last error: {type(last).__name__}). "
+        "Check that the HF_TOKEN secret is set and that your account has been granted access to the model."
+    ) from last
 
 
 def _import_nvidia(repo: str):
