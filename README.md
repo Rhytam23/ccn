@@ -65,31 +65,32 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: create
   At some points it adds logical errors (d=7, p=0.002: 3.75e-4 vs 2.5e-4).
 * **qLDPC:** the first GPU BP implementation (dense tensors) was 5-15x *slower* than the C++ `ldpc` library.
 
-### Colab T4, run 2 (current code, `--profile quick`; data in `results/colab-gpu/`)
-Surface code, 20,000 shots per point, GPU local pre-decoder + PyMatching vs PyMatching alone (same Colab session, 2 vCPU):
+### Colab T4, run 2: full profile, 200,000 shots/point (data in `results/colab-gpu/`, code at commit `a381f7f`)
 
-| d | p | end-to-end | stage 1 (GPU) | PyMatching on residual vs raw | logical errors (ours / PyMatching) |
-|---|---|---|---|---|---|
-| 5 | 0.002 | 1.22x | 0.01 s | 0.02 s vs 0.04 s | 27 / 27 |
-| 5 | 0.004 | 1.24x | 0.01 s | 0.03 s vs 0.05 s | 158 / 155 |
-| 7 | 0.002 | 1.14x | 0.02 s | 0.04 s vs 0.08 s | 5 / 5 |
-| 7 | 0.004 | 1.62x | 0.03 s | 0.14 s vs 0.28 s | 80 / 71 |
+**qLDPC (code-capacity noise): the GPU BP is now a modest real win and matches `ldpc` exactly.**
 
-* **First real GPU result:** a modest 1.1-1.6x end-to-end speed-up, with logical error counts equal within statistical noise except d=7, p=0.004 (80 vs 71). This is the quick profile and small distances;
-  the `full` profile (d up to 13, 200k shots) has not been run on the new code.
-* **qLDPC (1,000 shots, quick profile):** the rewritten GPU BP is now about 20k shots/s vs 84k shots/s for the C++ `ldpc` on [[72,12,6]], p=0.02 (it was 9k in run 1), identical LER. 1,000 shots is too small to
-  load a GPU, so this is not yet a fair comparison: rerun with `PROFILE = "full"` (20,000 shots) before drawing conclusions. No qLDPC speed-up has been shown.
-* CUDA-Q QEC was not installed and the Ising comparison has not run (no Hugging Face token yet).
+| code | p | GPU hybrid vs C++ ldpc (shots/s) | logical errors (GPU / ldpc) |
+|---|---|---|---|
+| [[72,12,6]] | 0.02 | 86k vs 78k = 1.11x | 226 / 226 |
+| [[72,12,6]] | 0.06 | 21k vs 19k = 1.12x | 4991 / 4991 |
+| [[144,12,12]] | 0.02 | 62k vs 39k = **1.58x** | 13 / 13 |
+| [[144,12,12]] | 0.04 | 25k vs 20k = 1.26x | 233 / 233 |
+| [[144,12,12]] | 0.06 | 7.9k vs 7.6k = 1.03x | 1772 / 1772 |
 
-### What changed since run 1, and what it means
-* **BP rewritten** (edge lists + dropping converged shots from the working batch): identical output to the dense version (unit-tested) and 20-160x faster on the same CPU
-  (4000 shots: 9.8 s -> 0.24 s on [[72,12,6]], 40.9 s -> 0.25 s on [[144,12,12]], p=0.02). **Not yet re-measured on a GPU against `ldpc`: rerun notebook 01.**
-* **The local surface-code pre-decoder is a weak, approximate pre-decoder:** it clears 40-60 % of syndrome weight, which makes PyMatching on the residual 1.4-2x faster, but it costs
-  4-25 % extra logical errors (e.g. 37 vs 21 at d=7, p=0.002) and extra passes or exact shortest-path validation do not change that. This is the classical baseline that motivates a *learned* pre-decoder.
-* **The comparison that matters** is NVIDIA's trained Ising CNN vs this baseline vs PyMatching on identical shots (`notebooks/03_ising_head_to_head.ipynb`, needs your Hugging Face token). It has not been run with trained weights.
-* The MLP gate is a negative result beyond d=5 and is kept only as an ablation.
+Batch throughput only: single-shot latency is ~1.6-6 ms on the GPU vs ~11-40 us for `ldpc`, so this is not a real-time latency win.
+(The "BP converged" column in that run is wrong: it was read after the latency loop. Fixed in the next commit.)
 
-Quote only what a `results/colab-gpu*` run with CSV + `meta.json` shows, with its hardware, profile and logical error counts.
+**Surface code, run-2 code (aggressive radius-1 local rule): not a win.** At d>=7 stage 1 cost more than it saved (d=13: stage 1 3.6 s vs 3.3 s saved) and it added logical
+errors (d=13, p=0.004: 161 vs 109; d=9, p=0.004: 586 vs 486). The MLP gate was slower than PyMatching almost everywhere.
+
+### What changed after run 2 (CPU-verified, GPU not yet re-measured)
+* **Accuracy fix found on CPU:** requiring that *nothing else fired within two hops* of an isolated pair (`radius=2`, now the default) removes the extra logical errors entirely
+  (d=9, p=0.004: 449 vs 448 baseline errors; d=7, p=0.002: 52 vs 52, 200k shots each) at the price of a smaller speed-up for the global decoder (1.1-1.3x instead of 1.4-1.7x).
+  The aggressive rule is kept as `radius=1` ("fast"), so the benchmark now reports both: a lossless dial and a faster-but-lossy one.
+* **Stage 1 made cheap on the GPU:** 1-byte uploads widened on the device, fp16 matrix products on tensor cores (exact for these small integer counts), and host-side
+  bookkeeping moved out of the timed region. The GPU code path is unit-tested for equality with the CPU path (in fp32). **Run notebook 04 again to measure it.**
+* **Honest expectation:** with radius-2 the safe rule makes the PyMatching stage only ~1.1-1.3x faster, so even a free stage 1 gives about that much end-to-end. A larger surface-code gain
+  needs a stronger pre-decoder, which is what the NVIDIA Ising comparison (notebook 04, needs the Hugging Face token) is for. It has not produced results yet.
 
 ## Tests
 

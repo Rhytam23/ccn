@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-02 07:34:57",
+  "timestamp": "2026-10-02 08:17:26",
   "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
   "python": "3.13.15",
   "cpu_count": 2,
@@ -9,5 +9,5 @@
   "device": "cuda",
   "gpu": "Tesla T4",
   "cudaq_qec": "unavailable (ModuleNotFoundError: No module named 'cudaq_qec')",
-  "profile": "quick"
+  "profile": "full"
 }

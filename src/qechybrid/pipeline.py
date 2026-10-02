@@ -31,17 +31,15 @@ class HybridDecoder:
         if self.mode == "local":
             resid, flip = self.local.predecode(dets)
             acc = (resid.sum(dim=1) == 0).cpu().numpy()
-            self._res_w = float(resid.sum()) / max(1.0, float(np.sum(dets)))
             return acc, flip.cpu().numpy()[:, None], resid.cpu().numpy()
         z = self.gate.logits(dets)
         acc = (z.abs().amax(-1) >= self.gate.threshold).cpu().numpy()
         return acc, (z > 0).to(torch.uint8).cpu().numpy(), dets
 
     def decode_batch(self, dets: np.ndarray) -> np.ndarray:
-        t0 = now(self.device)
-        preds, accepted = [], 0
+        preds, accepted, residuals = [], 0, []
         t_gate = t_match = 0.0
-        w_in = w_out = 0.0
+        t0 = now(self.device)
         for i in range(0, len(dets), self.chunk):
             d = dets[i : i + self.chunk]
             a = now(self.device)
@@ -56,17 +54,21 @@ class HybridDecoder:
             t_gate += b - a
             t_match += c - b
             accepted += int(acc.sum())
-            w_in += float(d.sum())
-            w_out += float(res.sum())
+            residuals.append(res)
             preds.append(out)
+        result = np.concatenate(preds) if preds else np.zeros((0, 1), np.uint8)
+        t_total = now(self.device) - t0
+        # bookkeeping below is deliberately outside the timed region
+        w_in = float(sum(int(dets[i : i + self.chunk].sum()) for i in range(0, len(dets), self.chunk)))
+        w_out = float(sum(int(r.sum()) for r in residuals))
         self.stats = {
             "accept_rate": accepted / max(1, len(dets)),
-            "t_total": now(self.device) - t0,
+            "t_total": t_total,
             "t_gate": t_gate,
             "t_match": t_match,
             "syndrome_weight_kept": w_out / max(1.0, w_in),
         }
-        return np.concatenate(preds) if preds else np.zeros((0, 1), np.uint8)
+        return result
 
     def decode_one(self, det: np.ndarray) -> np.ndarray:
         acc, p, res = self._front(det[None])

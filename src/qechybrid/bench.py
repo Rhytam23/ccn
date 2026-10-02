@@ -92,14 +92,15 @@ def run_surface(d, p, cfg, device, log=print):
     modes = [
         ("pymatching (CPU)", "none", None),
         ("zero-syndrome shortcut + pymatching", "zero", None),
-        ("GPU local pre-decoder + pymatching", "local", None),
+        ("GPU local pre-decoder (safe, r=2) + pymatching", "local", 2),
+        ("GPU local pre-decoder (fast, r=1) + pymatching", "local", 1),
         ("AI gate (MLP, strict) + pymatching", "nn", 0.05),
     ]
-    local = LocalPreDecoder(matcher.m, device=device)
+    locals_ = {rad: LocalPreDecoder(matcher.m, device=device, radius=rad) for rad in (1, 2)}
     for name, mode, budget in modes:
-        if budget is not None:
+        if mode == "nn":
             gate.calibrate(va_d, va_o, va_match, max_extra_error_frac=budget)
-        dec = HybridDecoder(matcher, gate, mode=mode, device=device, local=local)
+        dec = HybridDecoder(matcher, gate, mode=mode, device=device, local=locals_.get(budget))
         dec.decode_batch(te_d[:2000])  # warm-up
         best = None
         for _ in range(2):
@@ -141,11 +142,11 @@ def run_qldpc(code, p, cfg, device, log=print):
         t0 = now(dev)
         est = dec.decode_batch(S)
         dt = now(dev) - t0
+        conv = getattr(dec, "last_converged_frac", None)  # read before the latency loop overwrites it
         errs = int(code.logical_failure(e, est).sum())
         ler, lo, hi = wilson(errs, n)
         fn = (lambda x: dec.decode_batch(x)) if not isinstance(dec, CpuBpOsd) else (lambda x: dec.decode_one(x[0]))
         lat = _latency(fn, lat_items, warmup=10, device=dev)
-        conv = getattr(dec, "last_converged_frac", None)
         rows.append(
             _row(
                 code=code.name, d=0, rounds=0, p=p, decoder=name, device=dev, shots=n, errors=errs, ler=ler, ler_lo=lo,

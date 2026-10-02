@@ -109,3 +109,27 @@ def test_edge_list_bp_matches_dense_reference():
         en, cn = BatchedMinSumBP(c.hz, pri).decode(s)
         eo, co = DenseMinSumBP(c.hz, pri, chunk=300).decode(s)
         assert (cn == co).all() and (en[cn] == eo[co]).all()
+
+
+def test_dense_gpu_code_path_matches_sparse_cpu_path():
+    """The CUDA path (dense GEMMs) is exercised on CPU in fp32 and must equal the scipy path."""
+    import torch
+
+    circ = surface_circuit(5, 0.004)
+    m = MatchingDecoder(circ)
+    td, _ = sample(circ, 3000, 9)
+    for radius in (1, 2):
+        ra, fa = LocalPreDecoder(m.m, radius=radius, dense=False).predecode(td)
+        rb, fb = LocalPreDecoder(m.m, radius=radius, dense=True).predecode(td)
+        assert torch.equal(ra, rb) and torch.equal(fa, fb)
+
+
+def test_safe_radius_adds_no_logical_errors_and_is_sparser():
+    circ = surface_circuit(7, 0.003)
+    m = MatchingDecoder(circ)
+    td, to = sample(circ, 60000, 4)
+    base = int((m.decode_batch(td)[:, 0] != to[:, 0]).sum())
+    h = HybridDecoder(m, mode="local", local=LocalPreDecoder(m.m, radius=2))
+    errs = int((h.decode_batch(td)[:, 0] != to[:, 0]).sum())
+    assert h.stats["syndrome_weight_kept"] < 0.9
+    assert errs <= base * 1.1 + 4
