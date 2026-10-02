@@ -10,4 +10,4 @@ python scripts/make_report.py
 * Keep decoders behind the small interfaces used today: `decode_batch(np.ndarray) -> np.ndarray` and, for latency, `decode_one`.
 * Any new decoder needs (1) a correctness test against an existing decoder and (2) a row in `bench.py`.
 * Never commit model weights, tokens, or `.env` files. Results CSVs and `meta.json` should be committed so the website is reproducible.
-* Quote a speed-up only with its hardware, batch size and LER (see `docs/METHODOLOGY.md`).
+* Quote a throughput ratio only with its hardware, batch size and logical-error counts, and define it (see `docs/METHODOLOGY.md`).

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import subprocess
 import time
 from pathlib import Path
 
@@ -44,8 +45,27 @@ def environment_meta(device: str) -> dict:
     import stim
     import torch
 
+    try:
+        import ldpc
+
+        ldpc_version = getattr(ldpc, "__version__", "unknown")
+    except Exception:
+        ldpc_version = "unavailable"
+
+    def _git(*args):
+        try:
+            return subprocess.run(["git", *args], cwd=Path(__file__).resolve().parent, capture_output=True, text=True, timeout=10).stdout.strip()
+        except Exception:
+            return ""
+
+    commit = _git("rev-parse", "--short", "HEAD")
     meta = dict(
         timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
+        git_commit=commit or "unknown",
+        git_dirty=bool(_git("status", "--porcelain")) if commit else None,
+        ldpc=ldpc_version,
+        cuda=torch.version.cuda,
+        gpu_memory_gb=round(torch.cuda.get_device_properties(0).total_memory / 2**30, 1) if torch.cuda.is_available() else None,
         platform=platform.platform(),
         python=platform.python_version(),
         cpu_count=os.cpu_count(),

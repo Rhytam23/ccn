@@ -19,6 +19,6 @@ Observed (shots/s, T4 + Colab CPU):
 | [[144,12,12]] p=0.02 | 39,427 | 2,745 |
 | [[144,12,12]] p=0.06 | 7,290 | 2,191 |
 
-Conclusions: no end-to-end surface-code speed-up from the local pre-decoder (it resolves ~0 shots at d>=9 and costs
+Conclusions: no end-to-end surface-code throughput gain from the local pre-decoder (it resolves ~0 shots at d>=9 and costs
 extra logical errors); the dense GPU BP was 5-15x slower than C++ ldpc. Follow-up: BP rewritten with edge lists and
 active-set shrinking (20-160x faster than the dense version on CPU, identical output; see tests); needs a new Colab run.

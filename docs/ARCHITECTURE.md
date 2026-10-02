@@ -33,7 +33,7 @@ Two instantiations share the same idea (cheap parallel stage first, exact stage 
 |---|---|
 | `data.py` | Stim rotated surface-code circuits, detector sampling, detector-error-model to (H, L, priors) |
 | `local_predecoder.py` | Sparse-matrix local rule: mutually isolated fired pairs are matched along their edge if that is no costlier than two boundary matches |
-| `gate.py` | MLP predicting the logical flip; threshold on \|logit\| calibrated on held-out data to bound extra logical errors |
+| `gate.py` | MLP predicting the logical flip; threshold on \|logit\| calibrated on held-out data to limit extra logical errors (empirical, not a guarantee) |
 | `pipeline.py` | `HybridDecoder` with modes `none`, `zero`, `nn`, `local`; batch and single-shot paths |
 | `bp_gpu.py` | Dense batched normalised min-sum BP, chunked over the batch |
 | `decoders.py` | `MatchingDecoder`, `CpuBpOsd`, `HybridBpOsd` |

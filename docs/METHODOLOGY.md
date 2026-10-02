@@ -2,6 +2,12 @@
 
 Read this before quoting any number from the repo.
 
+## Definitions (used everywhere)
+* **Throughput ratio** = GPU-pipeline shots/s &divide; CPU-baseline shots/s on the same shots in the same session. &gt;1 means the GPU pipeline is faster, &lt;1 means it is slower. It is *not* a latency.
+* **Latency ratio** (if quoted) = CPU latency &divide; GPU latency for the same batch size.
+* **End-to-end** = stage 1 (pre-decoder) + stage 2 (global decoder), transfers included, GPU-synchronised.
+* **Identical logical-error counts** on the same shots mean the two decoders made the same number of mistakes there; this is evidence, not a proof of statistical equivalence. Wilson 95 % intervals are in the CSVs and the detailed tables.
+
 ## Noise models
 * **Surface code:** Stim `surface_code:rotated_memory_z`, `rounds = d`, uniform circuit-level depolarising/flip noise `p` on gates, resets, measurements and idle data qubits.
 * **qLDPC:** bivariate-bicycle codes [[72,12,6]] and [[144,12,12]] under **code-capacity** i.i.d. bit-flip noise `p` (perfect syndrome measurement). This is a simplification and is labelled as such in every table.

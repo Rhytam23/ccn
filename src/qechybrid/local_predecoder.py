@@ -14,7 +14,7 @@ to the boundary, which is the one case where MWPM would choose differently.
 Everything is sparse-matrix products over the whole batch, so it runs on CUDA unchanged.
 The residual syndrome goes to the exact global decoder. The local rule is a HEURISTIC, not
 provably MWPM-equivalent: measured, it costs ~4-25 % extra logical errors (see README), so
-always check LER next to any speed-up.
+always report logical-error counts next to any throughput ratio.
 """
 from __future__ import annotations
 

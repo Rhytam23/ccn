@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GPU-Accelerated AI-Enhanced QEC Decoder</title>
+<title>qechybrid: GPU-Accelerated Hybrid QEC Decoding</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
   :root { --bg:#0e1116; --card:#161b22; --fg:#e6edf3; --mut:#8b949e; --acc:#76b900; --line:#30363d; }
@@ -25,14 +25,14 @@
 <body>
 <header>
   <span class="pill">NVIDIA / Open Hackathons</span>
-  <h1>GPU-accelerated, AI-enhanced QEC decoding</h1>
-  <p class="sub">A hybrid pipeline: a fast GPU pre-decoder clears the easy, local syndromes; only the hard residual reaches the exact global decoder
-  (MWPM for the surface code, BP+OSD for qLDPC). Every number below is measured by the benchmark harness in this repo.</p>
+  <h1>GPU-accelerated hybrid QEC decoding</h1>
+  <p class="sub">A hybrid pipeline: a pre-decoder clears the easy, local part of the syndrome; only the residual reaches the global decoder
+  (MWPM for the surface code, BP+OSD for qLDPC and for the experimental Ising pipeline). Every number below is measured by the benchmark harness in this repo; rows where the GPU is slower than the CPU are shown on purpose.</p>
   <div class="card"><b>Run:</b> <select id="run"></select><span id="meta" class="note"></span></div>
 </header>
 <main>
   <div class="warn note" id="honesty"></div>
-  <div class="card" id="summary" style="display:none"><b id="sum_title"></b><div id="sum_body"></div><div class="note">Speed-up = throughput relative to the CPU baseline measured in the same session. Batch throughput only; see the latency table for single-shot numbers. Rows below 1.00x are shown on purpose.</div></div>
+  <div class="card" id="summary" style="display:none"><b id="sum_title"></b><div id="sum_body"></div><div class="note">Throughput ratio = GPU shots/s &divide; CPU-baseline shots/s, measured on the same shots in the same session (&gt;1: GPU faster, &lt;1: GPU slower). Batch throughput only, not latency; see the latency table for single-shot numbers.</div></div>
 
   <h2>Surface code (circuit-level noise, Stim)</h2>
   <div class="card">Distance <select id="d"></select> <span class="note">Latency table and curves update with the selection.</span></div>
@@ -95,14 +95,14 @@ function render(){
     const Q0 = run.qldpc || [], isGpu = !!m.gpu;
     $("summary").style.display = isGpu && (S.length || Q0.length) ? "block" : "none";
     if(!isGpu) return;
-    $("sum_title").textContent = "GPU speed-up summary - " + m.gpu + " (" + (m.profile||"?") + " profile)";
+    $("sum_title").textContent = "GPU benchmark summary - " + m.gpu + " (" + (m.profile||"?") + " profile)";
     const bs = Object.fromEntries(S.filter(r=>r.decoder==="pymatching (CPU)").map(r=>[r.d+"|"+r.p, r]));
     const sr = S.filter(r=>r.decoder.startsWith("GPU local pre-decoder")).map(r=>({k:"d="+r.d+" p="+r.p+(r.decoder.includes("(safe")?" [safe r=2]":r.decoder.includes("(fast")?" [fast r=1]":""), x:r.throughput_sps/bs[r.d+"|"+r.p].throughput_sps, e:r.errors, eb:bs[r.d+"|"+r.p].errors}));
     const bq = Object.fromEntries(Q0.filter(r=>r.decoder.includes("ldpc BP")).map(r=>[r.code+"|"+r.p, r]));
     const qr = Q0.filter(r=>r.decoder.startsWith("GPU")).map(r=>({k:r.code+" p="+r.p, x:r.throughput_sps/bq[r.code+"|"+r.p].throughput_sps, e:r.errors, eb:bq[r.code+"|"+r.p].errors}));
-    const tbl = (title, rs) => rs.length ? "<p><b>"+title+"</b>: "+Math.min(...rs.map(r=>r.x)).toFixed(2)+"x to "+Math.max(...rs.map(r=>r.x)).toFixed(2)+"x</p><table><tr><th>case</th><th>speed-up</th><th>errors (ours / baseline)</th></tr>"+
+    const tbl = (title, rs) => rs.length ? "<p><b>"+title+"</b>: throughput ratio "+Math.min(...rs.map(r=>r.x)).toFixed(2)+"x to "+Math.max(...rs.map(r=>r.x)).toFixed(2)+"x</p><table><tr><th>case</th><th>throughput ratio</th><th>logical errors (ours / baseline)</th></tr>"+
       rs.map(r=>`<tr><td>${r.k}</td><td>${r.x.toFixed(2)}x</td><td>${r.e} / ${r.eb}</td></tr>`).join("")+"</table>" : "";
-    $("sum_body").innerHTML = tbl("qLDPC: GPU batched BP vs C++ ldpc", qr) + tbl("Surface code: GPU pre-decoder + PyMatching vs PyMatching" + (S.some(r=>r.decoder.includes("(safe")) ? "" : " (first, aggressive radius-1 rule)"), sr);
+    $("sum_body").innerHTML = tbl("qLDPC: GPU batched BP vs C++ ldpc", qr) + tbl("Surface code: GPU pre-decoder + PyMatching vs PyMatching alone" + (S.some(r=>r.decoder.includes("(safe")) ? "" : " (first, aggressive radius-1 rule)"), sr);
   })();
   const ds = [...new Set(S.map(r=>r.d))]; if(!$("d").options.length) ds.forEach(d=>$("d").add(new Option("d="+d, d)));
   const d = +$("d").value || ds[0];
@@ -113,12 +113,12 @@ function render(){
   Plotly.newPlot("thr", traces("throughput_sps"), layout("Batched throughput","physical error rate p","shots / s","log"), {displayModeBar:false});
   const base = Object.fromEntries((dec["pymatching (CPU)"]||[]).map(r=>[r.p,r.throughput_sps]));
   const sp = names.filter(n=>n!=="pymatching (CPU)").map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r.throughput_sps/base[r.p]), name:n, type:"bar", marker:{color:colors[(i+1)%6]}}));
-  Plotly.newPlot("spd", sp, {...layout("Throughput speed-up vs PyMatching","physical error rate p","x faster"), barmode:"group"}, {displayModeBar:false});
+  Plotly.newPlot("spd", sp, {...layout("Throughput ratio vs PyMatching (>1: faster)","physical error rate p","ratio"), barmode:"group"}, {displayModeBar:false});
   const ac = names.filter(n=>n!=="pymatching (CPU)").map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r.accept_rate), name:n, type:"bar", marker:{color:colors[(i+1)%6]}}));
   Plotly.newPlot("acc", ac, {...layout("Shots fully resolved on the fast path","physical error rate p","fraction"), barmode:"group"}, {displayModeBar:false});
   const bg = Object.fromEntries((dec["pymatching (CPU)"]||[]).map(r=>[r.p,r.throughput_sps]));
   const tg = names.filter(n=>n!=="pymatching (CPU)" && dec[n].some(r=>r.t_global_s!=null)).map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r.t_global_s!=null ? (r.shots/bg[r.p])/r.t_global_s : null), name:n, type:"bar", marker:{color:colors[(i+1)%6]}}));
-  Plotly.newPlot("gt", tg, {...layout("Global-decoder speed-up (stage 2 only)","physical error rate p","x faster"), barmode:"group"}, {displayModeBar:false});
+  Plotly.newPlot("gt", tg, {...layout("Global-decoder time ratio (stage 2 only; >1: less time)","physical error rate p","ratio"), barmode:"group"}, {displayModeBar:false});
   const wk = names.filter(n=>n!=="pymatching (CPU)" && dec[n].some(r=>r.syndrome_weight_kept!=null)).map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r.syndrome_weight_kept), name:n, type:"bar", marker:{color:colors[(i+1)%6]}}));
   Plotly.newPlot("wk", wk, {...layout("Syndrome weight left for the global decoder","physical error rate p","fraction of fired detectors"), barmode:"group"}, {displayModeBar:false});
   const P = run.pipeline || [];

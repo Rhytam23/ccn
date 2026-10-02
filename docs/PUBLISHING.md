@@ -22,4 +22,4 @@ git push -u origin main
 
 ## Submission package
 - Public repo link, website link, 2-3 minute demo video (Colab run + website), the pitch outline in `PITCH.md`.
-- State the hardware (e.g. Colab T4) next to every speed-up number.
+- State the hardware (e.g. Colab T4) next to every throughput ratio, and what it is a ratio of.
