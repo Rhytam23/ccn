@@ -60,4 +60,53 @@ nb("03_ising_head_to_head.ipynb", [
     ("code", "!python scripts/make_report.py\n!zip -qr results_ising.zip results/colab-ising docs/index.html\nfrom google.colab import files; files.download('results_ising.zip')"),
     ("md", "Interpretation: compare LER (must match PyMatching), stage 1 vs stage 2 seconds, and total shots/s. Batch-1 latency is expected to favour plain PyMatching for NVIDIA's model too (see NVIDIA's own caveat in their cookbook)."),
 ])
+RUN_ALL_SETUP = SETUP.replace(
+    '# ---- edit this: your public GitHub repo ----\n',
+    '# ---- settings ----\nPROFILE = "quick"   # "quick" (~5 min) first, then "full" (~20-40 min)\nRUN_ISING = True    # needs the Colab secret HF_TOKEN (see the markdown cell above); skipped if missing\nRUN_CUDAQ = False   # optional: pip-installs cudaq-qec, which can change the environment\n',
+)
+
+ISING_CELL = """import os, subprocess
+if RUN_ISING:
+    try:
+        from google.colab import userdata
+        os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")   # never printed
+    except Exception as exc:
+        print("Skipping Ising head-to-head: no HF_TOKEN secret found (", type(exc).__name__, ")")
+        RUN_ISING = False
+if RUN_ISING:
+    if not os.path.exists("third_party/Ising-Decoding"):
+        subprocess.run(["git", "clone", "--depth", "1", "https://github.com/NVIDIA/Ising-Decoding.git", "third_party/Ising-Decoding"], check=True)
+    subprocess.run("pip -q install safetensors omegaconf hydra-core huggingface_hub beliefmatching", shell=True)
+    subprocess.run("python scripts/run_ising_bench.py --repo third_party/Ising-Decoding --download --device cuda --distances 9 13 --ps 0.003 0.005 --shots 20000 --tag colab-ising", shell=True)"""
+
+CUDAQ_CELL = """import subprocess
+if RUN_CUDAQ:
+    subprocess.run("pip -q install cudaq-qec", shell=True)
+    from qechybrid import cudaq_qec_adapter
+    print("cudaq_qec:", cudaq_qec_adapter.available())
+    subprocess.run("python scripts/run_benchmarks.py --profile quick --device cuda --tag colab-qldpc-cudaq --only qldpc", shell=True)
+else:
+    print("CUDA-Q QEC step skipped (RUN_CUDAQ = False)")"""
+
+SUMMARY_CELL = """import glob, pandas as pd
+for f in sorted(glob.glob("results/colab-*/*.csv")):
+    df = pd.read_csv(f)
+    print("\\n==", f, len(df), "rows")
+    cols = [c for c in ["code", "d", "p", "decoder", "ler", "throughput_sps", "accept_rate"] if c in df.columns]
+    print(df[cols].to_string(index=False, float_format=lambda x: f"{x:.3g}"))"""
+
+nb("04_run_everything_colab.ipynb", [
+    ("md", "# 04 - Run everything (Runtime > Run all)\n"
+           "Runs, in order: setup check, unit tests, GPU benchmarks (surface code + qLDPC), the NVIDIA Ising head-to-head, an optional CUDA-Q QEC step, then builds the website and downloads one zip.\n\n"
+           "**Before you run:** Runtime > Change runtime type > **T4 GPU**. Settings are in the first code cell. Start with `PROFILE = \"quick\"`.\n\n"
+           "**Ising step (optional):** accept the terms at https://huggingface.co/nvidia/ising_decoder_surface_code_1_fast , create a *read* token and add it as the Colab secret `HF_TOKEN` (key icon, notebook access ON). Without it that step is skipped and everything else still runs. Never paste the token into a cell."),
+    ("code", RUN_ALL_SETUP),
+    ("code", "!pip -q install pytest\n!pytest -q"),
+    ("code", '!python scripts/run_benchmarks.py --profile $PROFILE --device cuda --tag colab-gpu'),
+    ("code", ISING_CELL),
+    ("code", CUDAQ_CELL),
+    ("code", '!python scripts/make_report.py\n!zip -qr results_colab.zip results docs/index.html docs/figs'),
+    ("code", SUMMARY_CELL),
+    ("code", "from google.colab import files\nfiles.download('results_colab.zip')"),
+])
 print("notebooks written to", OUT)
