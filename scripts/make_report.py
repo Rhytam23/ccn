@@ -18,7 +18,7 @@ def _clean(df):
 
 def load():
     runs = {}
-    for d in sorted(p for p in RES.iterdir() if p.is_dir() and "plumbing" not in p.name):
+    for d in sorted(p for p in RES.iterdir() if p.is_dir() and "plumbing" not in p.name and any(p.glob("*.csv"))):
         meta = json.loads((d / "meta.json").read_text()) if (d / "meta.json").exists() else {}
         item = {"meta": meta}
         for name in ("surface", "qldpc", "ising"):
