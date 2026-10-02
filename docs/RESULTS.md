@@ -4,7 +4,7 @@
 
 *Throughput ratio = GPU-pipeline shots/s ÷ CPU-baseline shots/s on the same shots in the same session. A value above 1 means the GPU pipeline is faster, below 1 means it is slower. It is not a latency.*
 
-* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio 0.98x to 1.58x** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x; the GPU is slightly slower at the points below 1.00x). Logical-error counts are identical on the same shots at every point (evidence of the same decoding quality, not a proof; intervals in `docs/RESULTS.md`).
+* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio 0.98x to 1.58x** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x; the GPU is slightly slower at the points below 1.00x). Logical-error counts are identical on the same shots at every point (not a proof of equivalence; intervals in `docs/RESULTS.md`).
   *This is batch throughput, not latency: single-shot latency is worse on the GPU than on the CPU, so this is not a real-time result.*
 * **Surface code (circuit-level noise), first version (r=1) rule: throughput ratio 0.62x to 1.19x** (4 of 12 points above 1.02x; 344 more logical errors than PyMatching, summed over the points where ours was worse).
 * Best single surface-code point: first version (r=1) rule, d=5, p=0.002, ratio 1.19x.

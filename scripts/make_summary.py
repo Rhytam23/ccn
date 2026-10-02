@@ -78,13 +78,16 @@ best_s = max(rows, key=lambda x: x["ratio"])
 
 definition = ("*Throughput ratio = GPU-pipeline shots/s ÷ CPU-baseline shots/s on the same shots in the same session. "
               "A value above 1 means the GPU pipeline is faster, below 1 means it is slower. It is not a latency.*")
+qldpc_bullet = (
+    f"* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio {lo_q:.2f}x to {hi_q:.2f}x** vs the C++ `ldpc` BP+OSD "
+    f"(best: {best_q['code']}, p={best_q['p']}, {best_q['ratio']:.2f}x; the GPU is slightly slower at the points below 1.00x). "
+    f"Logical-error counts {'are identical' if same_errors else 'differ'} on the same shots at every point (not a proof of equivalence; intervals in `docs/RESULTS.md`).\n"
+    f"  *This is batch throughput, not latency: single-shot latency is worse on the GPU than on the CPU, so this is not a real-time result.*\n"
+)
 head = (
     f"**Measured on {gpu} (Google Colab, 2 vCPU), `{profile}` profile, {shots_s:,} surface-code shots and {shots_q:,} qLDPC shots per point; data: `results/{tag}/`.**\n\n"
     f"{definition}\n\n"
-    f"* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio {lo_q:.2f}x to {hi_q:.2f}x** vs the C++ `ldpc` BP+OSD "
-    f"(best: {best_q['code']}, p={best_q['p']}, {best_q['ratio']:.2f}x; the GPU is slightly slower at the points below 1.00x). "
-    f"Logical-error counts {'are identical' if same_errors else 'differ'} on the same shots at every point (evidence of the same decoding quality, not a proof; intervals in `docs/RESULTS.md`).\n"
-    f"  *This is batch throughput, not latency: single-shot latency is worse on the GPU than on the CPU, so this is not a real-time result.*\n"
+    + qldpc_bullet
     + surf_lines +
     f"* Best single surface-code point: {best_s['rule']} rule, d={best_s['d']}, p={best_s['p']}, ratio {best_s['ratio']:.2f}x.\n"
 )
@@ -137,17 +140,59 @@ if tag != "colab-gpu":
     print(md)
     raise SystemExit
 
-# ---------- README block (main run only): headline + compact qLDPC table; full tables in docs/RESULTS.md ----------
+# ---------- README block (main run only) ----------
+def surface_rows(df):
+    base_ = df[df.decoder == "pymatching (CPU)"].set_index(["d", "p"])
+    out = []
+    for _, r in df[df.decoder.str.startswith("GPU local pre-decoder")].iterrows():
+        b = base_.loc[(r.d, r.p)]
+        out.append(dict(d=int(r.d), p=r.p, rule=rule_of(r.decoder), ratio=r.throughput_sps / b.throughput_sps, eo=int(r.errors), eb=int(b.errors)))
+    return out
+
+
+def rule_bullets(rs, title):
+    out = ""
+    order = {"safe r=2": 0, "fast r=1": 1}
+    for rule in sorted({r["rule"] for r in rs}, key=lambda x: order.get(x, 2)):
+        rr = [r for r in rs if r["rule"] == rule]
+        xs = [r["ratio"] for r in rr]
+        extra = sum(max(0, r["eo"] - r["eb"]) for r in rr)
+        label = "" if rule.startswith("first version") else f", {rule} rule"
+        errs = "no extra logical errors at any point" if extra == 0 else f"{extra} extra logical error{'s' if extra != 1 else ''} in total at the points where ours was worse"
+        out += (f"* **Surface code, {title}{label}: throughput ratio {min(xs):.2f}x to {max(xs):.2f}x** "
+                f"({sum(1 for x in xs if x > 1.02)} of {len(rr)} points above 1.02x; {errs}).\n")
+    return out
+
+
+quick_dir = ROOT / "results" / "colab-gpu-quick"
+cur = ""
+cur_note = ""
+if quick_dir.exists():
+    qm = json.loads((quick_dir / "meta.json").read_text())
+    qs = pd.read_csv(quick_dir / "surface.csv")
+    cur = rule_bullets(surface_rows(qs), f"current code, quick profile (d=5, 7; {int(qs.shots.iloc[0]):,} shots; `results/colab-gpu-quick/`)")
+    cur_note = ("Surface-code results from the current code come from the quick profile only (d=5 and 7, small error counts); "
+                "the older full-profile surface-code result (last bullet above) used the first, aggressive radius-1 rule and a slower stage 1.")
+old = rule_bullets(rows, f"older code, full profile (d=5 to 13; {shots_s:,} shots; `results/{tag}/`)")
+
 compact = ("| code | p | C++ ldpc BP+OSD (shots/s) | GPU BP + OSD fallback (shots/s) | throughput ratio | logical errors (GPU / ldpc) |\n|---|---|---|---|---|---|\n" +
            "".join(f"| {r['code']} | {r['p']} | {fmt(r['bt'])} | {fmt(r['ot'])} | **{r['ratio']:.2f}x** | {r['eo']} / {r['eb']} |\n" for r in qrows))
-block = (f"<!-- RESULTS:START -->\n### GPU benchmark results ({gpu})\n\n{head}\n{compact}\n{caveat}\n"
-         f"Confidence intervals, surface-code tables and the full environment record: [docs/RESULTS.md](docs/RESULTS.md).\n<!-- RESULTS:END -->")
+readme_caveat = (
+    "Caveats: batch throughput only (the GPU is slower than the CPU for single shots; see `docs/RESULTS.md`). " + cur_note + " "
+    "Ratios are relative to CPU baselines on the same Colab machine."
+)
+block = (
+    f"<!-- RESULTS:START -->\n## GPU benchmark results ({gpu})\n\n"
+    f"**Measured on {gpu} (Google Colab, 2 vCPU); qLDPC: `{profile}` profile, {shots_q:,} shots per point (`results/{tag}/`).**\n\n{definition}\n\n"
+    f"{qldpc_bullet}{cur}{old}\n{compact}\n{readme_caveat}\n\n"
+    f"Confidence intervals, surface-code tables and the environment record: [docs/RESULTS.md](docs/RESULTS.md), [docs/RESULTS_colab-gpu-quick.md](docs/RESULTS_colab-gpu-quick.md).\n<!-- RESULTS:END -->"
+)
 readme = (ROOT / "README.md").read_text(encoding="utf-8")
 if "<!-- RESULTS:START -->" in readme:
-    a = readme.index("<!-- RESULTS:START -->")
-    b = readme.index("<!-- RESULTS:END -->") + len("<!-- RESULTS:END -->")
-    readme = readme[:a] + block + readme[b:]
+    a_ = readme.index("<!-- RESULTS:START -->")
+    b_ = readme.index("<!-- RESULTS:END -->") + len("<!-- RESULTS:END -->")
+    readme = readme[:a_] + block + readme[b_:]
 else:
-    readme = readme.replace("## What is in the repo", block + "\n\n## What is in the repo", 1)
+    readme = readme.replace("## Status at a glance", block + "\n\n## Status at a glance", 1)
 (ROOT / "README.md").write_text(readme, encoding="utf-8")
 print(md)

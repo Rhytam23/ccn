@@ -47,27 +47,18 @@ PyMatching stays the main surface-code baseline because it is the fastest practi
 * **Logical errors (ours / baseline)** are counts on the same shots. Equal counts mean both decoders made the same number of mistakes on those shots; they do not prove the decoders are equivalent. Wilson 95 % intervals are in the CSVs and in [docs/RESULTS.md](docs/RESULTS.md).
 * **What `x` means:** a number written like `1.58x` is a throughput ratio as defined above (the `x` is only a unit symbol); `0.98x` means the GPU pipeline was slightly slower. Ranges such as `0.98-1.58` in the history are the same ratio without the symbol.
 
-## Glossary
-
-* **PyMatching / MWPM:** minimum-weight perfect matching on a graph of detectors; the standard fast surface-code decoder.
-* **BP (belief propagation):** iterative message passing on the parity-check graph; fast and parallel, but it can fail to converge on short cycles.
-* **OSD (ordered-statistics decoding):** a linear-algebra post-processing step that rescues shots where BP does not converge.
-* **Ising pre-decoder:** NVIDIA's learned 3D-CNN that removes easy local errors from the syndrome before a global decoder runs ([repo](https://github.com/NVIDIA/Ising-Decoding)).
-* **Stim / DEM:** circuit simulator and the detector error model it derives (see above).
-* **qLDPC / bivariate-bicycle (BB) code:** a high-rate quantum code family; we use [[72,12,6]] and [[144,12,12]].
-* **Code-capacity vs circuit-level noise:** code-capacity assumes perfect syndrome measurement (simpler, used for the qLDPC codes); circuit-level models noisy gates and measurements (used for the surface code).
-
 <!-- RESULTS:START -->
-### GPU benchmark results (Tesla T4)
+## GPU benchmark results (Tesla T4)
 
-**Measured on Tesla T4 (Google Colab, 2 vCPU), `full` profile, 200,000 surface-code shots and 20,000 qLDPC shots per point; data: `results/colab-gpu/`.**
+**Measured on Tesla T4 (Google Colab, 2 vCPU); qLDPC: `full` profile, 20,000 shots per point (`results/colab-gpu/`).**
 
 *Throughput ratio = GPU-pipeline shots/s ÷ CPU-baseline shots/s on the same shots in the same session. A value above 1 means the GPU pipeline is faster, below 1 means it is slower. It is not a latency.*
 
-* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio 0.98x to 1.58x** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x; the GPU is slightly slower at the points below 1.00x). Logical-error counts are identical on the same shots at every point (evidence of the same decoding quality, not a proof; intervals in `docs/RESULTS.md`).
+* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio 0.98x to 1.58x** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x; the GPU is slightly slower at the points below 1.00x). Logical-error counts are identical on the same shots at every point (not a proof of equivalence; intervals in `docs/RESULTS.md`).
   *This is batch throughput, not latency: single-shot latency is worse on the GPU than on the CPU, so this is not a real-time result.*
-* **Surface code (circuit-level noise), first version (r=1) rule: throughput ratio 0.62x to 1.19x** (4 of 12 points above 1.02x; 344 more logical errors than PyMatching, summed over the points where ours was worse).
-* Best single surface-code point: first version (r=1) rule, d=5, p=0.002, ratio 1.19x.
+* **Surface code, current code, quick profile (d=5, 7; 20,000 shots; `results/colab-gpu-quick/`), safe r=2 rule: throughput ratio 1.08x to 1.32x** (4 of 4 points above 1.02x; 1 extra logical error in total at the points where ours was worse).
+* **Surface code, current code, quick profile (d=5, 7; 20,000 shots; `results/colab-gpu-quick/`), fast r=1 rule: throughput ratio 0.90x to 2.53x** (3 of 4 points above 1.02x; 12 extra logical errors in total at the points where ours was worse).
+* **Surface code, older code, full profile (d=5 to 13; 200,000 shots; `results/colab-gpu/`): throughput ratio 0.62x to 1.19x** (4 of 12 points above 1.02x; 344 extra logical errors in total at the points where ours was worse).
 
 | code | p | C++ ldpc BP+OSD (shots/s) | GPU BP + OSD fallback (shots/s) | throughput ratio | logical errors (GPU / ldpc) |
 |---|---|---|---|---|---|
@@ -78,9 +69,9 @@ PyMatching stays the main surface-code baseline because it is the fastest practi
 | BB[[144,12,12]] | 0.04 | 19,885 | 24,982 | **1.26x** | 233 / 233 |
 | BB[[144,12,12]] | 0.06 | 7,627 | 7,853 | **1.03x** | 1772 / 1772 |
 
-Caveats: batch throughput only (single-shot latency is worse on the GPU than on the CPU); the surface-code rows are for the first, aggressive local rule, which also adds logical errors at some points (compare the error columns); the fp16 stage 1 and the `radius=2` rule were not part of this run. Ratios are relative to CPU baselines on the same Colab machine.
+Caveats: batch throughput only (the GPU is slower than the CPU for single shots; see `docs/RESULTS.md`). Surface-code results from the current code come from the quick profile only (d=5 and 7, small error counts); the older full-profile surface-code result (last bullet above) used the first, aggressive radius-1 rule and a slower stage 1. Ratios are relative to CPU baselines on the same Colab machine.
 
-Confidence intervals, surface-code tables and the full environment record: [docs/RESULTS.md](docs/RESULTS.md).
+Confidence intervals, surface-code tables and the environment record: [docs/RESULTS.md](docs/RESULTS.md), [docs/RESULTS_colab-gpu-quick.md](docs/RESULTS_colab-gpu-quick.md).
 <!-- RESULTS:END -->
 
 ## Status at a glance
@@ -94,6 +85,16 @@ Confidence intervals, surface-code tables and the full environment record: [docs
 | NVIDIA Ising trained model | **One trained-weight T4 case** (d=9, p=0.003); its timing was invalid (compile warm-up inside the timed region); later runs produced no results |
 | CUDA-Q QEC `nv-qldpc-decoder` | **Not verified**: `cudaq-qec` was not installed in any run (the decoder is a closed-source library, see the [CUDA-Q QEC docs](https://nvidia.github.io/cudaq-qec/)) |
 | Full pipeline: Ising (GPU) -> GPU BP+OSD vs CPU baselines | **Not yet measured**: plumbing checked on CPU with random weights only |
+
+## Glossary
+
+* **PyMatching / MWPM:** minimum-weight perfect matching on a graph of detectors; the standard fast surface-code decoder.
+* **BP (belief propagation):** iterative message passing on the parity-check graph; fast and parallel, but it can fail to converge on short cycles.
+* **OSD (ordered-statistics decoding):** a linear-algebra post-processing step that rescues shots where BP does not converge.
+* **Ising pre-decoder:** NVIDIA's learned 3D-CNN that removes easy local errors from the syndrome before a global decoder runs ([repo](https://github.com/NVIDIA/Ising-Decoding)).
+* **Stim / DEM:** circuit simulator and the detector error model it derives (see above).
+* **qLDPC / bivariate-bicycle (BB) code:** a high-rate quantum code family; we use [[72,12,6]] and [[144,12,12]].
+* **Code-capacity vs circuit-level noise:** code-capacity assumes perfect syndrome measurement (simpler, used for the qLDPC codes); circuit-level models noisy gates and measurements (used for the surface code).
 
 ## What is new here, what is not
 
