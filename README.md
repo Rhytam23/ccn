@@ -67,7 +67,15 @@ Full tables: [docs/RESULTS.md](docs/RESULTS.md).
 2. A classical local pre-decoder can be made lossless but only speeds the global decoder up ~1.1-1.3x; the end-to-end surface-code gain from our own rule is about 1x on a T4.
 3. NVIDIA's trained Ising model leaves ~3 % of the syndrome at d=9 (one measured case so far); its end-to-end timing is pending a valid re-run.
 
-**What we do not claim:** a real-time (single-shot, microsecond) GPU advantage: on the T4 the GPU paths lose at batch size 1. No surface-code speed-up from our own rule beyond ~1.3x, and no Ising speed-up until `results/colab-ising/` exists.
+**What we do not claim:** a real-time (single-shot, microsecond) GPU advantage: on the T4 the GPU paths lose at batch size 1. No surface-code speed-up from our own rule beyond ~1.3x, and no Ising or full-pipeline speed-up until `results/colab-ising/` and `results/colab-pipeline/` exist.
+
+### The full pipeline experiment (`scripts/run_full_pipeline.py`, run by notebook 04): **results pending**
+On identical shots (NVIDIA's circuit, trained Ising weights) it measures total wall-clock time and logical errors for
+CPU PyMatching, CPU BP+OSD, Ising + PyMatching, Ising + CPU BP+OSD, and the full pipeline **Ising (GPU) -> GPU BP with CPU OSD fallback**.
+Two baselines are reported on purpose, because "the CPU baseline" is ambiguous:
+* vs **CPU BP+OSD** (same algorithm family): the fair test of the GPU decoder. In a plumbing run, CPU BP+OSD cost ~33 ms/shot at d=9.
+* vs **PyMatching** (the fastest practical CPU decoder, ~60 us/shot at d=9): the honest test of whether the pipeline is useful in practice.
+  Expect the full pipeline to be far faster than CPU BP+OSD; whether it can beat PyMatching depends on how sparse the Ising residual is and how often GPU BP converges. We do not know yet.
 
 ## Documentation
 

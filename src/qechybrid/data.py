@@ -34,9 +34,9 @@ class DemMatrices:
     priors: np.ndarray
 
 
-def dem_matrices(circuit: stim.Circuit) -> DemMatrices:
+def dem_matrices(circuit: stim.Circuit, approximate_disjoint_errors: bool = True) -> DemMatrices:
     """Undecomposed DEM -> check matrix, observable matrix, priors (identical faults merged)."""
-    dem = circuit.detector_error_model(decompose_errors=False)
+    dem = circuit.detector_error_model(decompose_errors=False, approximate_disjoint_errors=approximate_disjoint_errors)
     merged: dict[tuple, float] = {}
     for inst in dem.flattened():
         if inst.type != "error":

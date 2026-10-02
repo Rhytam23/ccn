@@ -16,6 +16,11 @@
 3. Run notebook 03. NVIDIA validates the model for d >= 9, so the default distances are 9 and 13.
 4. Without the token, `scripts/run_ising_bench.py` still runs with random weights: useful only to check plumbing and timing (rows are labelled and the LER is meaningless).
 
+## Full pipeline (AI pre-decoder + GPU decoder vs CPU baselines)
+`scripts/run_full_pipeline.py` (run by notebook 04 after the Ising step, tag `colab-pipeline`) measures, on identical shots, total time and logical errors for:
+CPU PyMatching, CPU BP+OSD, NVIDIA Ising + PyMatching, Ising + CPU BP+OSD, and the full pipeline **Ising (GPU) -> GPU BP with CPU OSD fallback**.
+The CPU BP+OSD rows use `--cpu-shots` (default 1000) because BP+OSD costs milliseconds per shot on this circuit; per-shot times are directly comparable.
+
 ## Troubleshooting
 | Symptom | Fix |
 |---|---|

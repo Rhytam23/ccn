@@ -133,3 +133,31 @@ def test_safe_radius_adds_no_logical_errors_and_is_sparser():
     errs = int((h.decode_batch(td)[:, 0] != to[:, 0]).sum())
     assert h.stats["syndrome_weight_kept"] < 0.9
     assert errs <= base * 1.1 + 4
+
+
+def test_dem_bp_osd_decoder_is_in_the_same_ballpark_as_mwpm():
+    """Circuit-level BP+OSD (GPU-BP path, run on CPU here) must give sane logical predictions."""
+    from qechybrid.decoders import DemBpOsd
+
+    circ = surface_circuit(5, 0.004)
+    dm = dem_matrices(circ)
+    m = MatchingDecoder(circ)
+    td, to = sample(circ, 1500, 12)
+    dec = DemBpOsd(dm, device="cpu")
+    mine = int((dec.decode_batch(td)[:, 0] != to[:, 0]).sum())
+    base = int((m.decode_batch(td)[:, 0] != to[:, 0]).sum())
+    assert mine <= 4 * base + 15  # BP+OSD-0 is weaker than MWPM but must not be broken
+    assert 0.0 <= dec.last["fallback_frac"] <= 1.0
+
+
+def test_bp_accepts_tensor_input_without_numpy_roundtrip():
+    import torch
+
+    from qechybrid.bp_gpu import BatchedMinSumBP
+
+    c = bb_72_12_6()
+    _, s = c.sample(200, 0.02, seed=2)
+    bp = BatchedMinSumBP(c.hz, np.full(c.n, 0.02))
+    a, ca = bp.decode(s)
+    b, cb = bp.decode(torch.as_tensor(s), to_numpy=False)
+    assert (a == b.to(torch.uint8).numpy()).all() and (ca == cb.numpy()).all()

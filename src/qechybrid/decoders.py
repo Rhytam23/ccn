@@ -24,7 +24,7 @@ class MatchingDecoder:
 
 
 class CpuBpOsd:
-    def __init__(self, H, priors, max_iter: int = 50, osd_order: int = 7, ms_scaling: float = 0.8):
+    def __init__(self, H, priors, max_iter: int = 50, osd_order: int = 7, ms_scaling: float = 0.8, osd_method: str = "osd_cs"):
         self.n = H.shape[1]
         self.dec = BpOsdDecoder(
             sp.csr_matrix(H, dtype=np.uint8),
@@ -32,7 +32,7 @@ class CpuBpOsd:
             max_iter=max_iter,
             bp_method="minimum_sum",
             ms_scaling_factor=ms_scaling,
-            osd_method="osd_cs",
+            osd_method=osd_method,
             osd_order=osd_order,
         )
 
@@ -60,3 +60,45 @@ class HybridBpOsd:
             est[bad] = self.osd.decode_batch(S[bad])
         self.last_converged_frac = float(conv.mean()) if len(conv) else 1.0
         return est
+
+
+class DemBpOsd:
+    """BP+OSD on a circuit-level detector error model (any Stim circuit), returning observable predictions.
+
+    GPU min-sum BP decodes the whole batch; only shots where BP did not converge fall back to CPU BP+OSD.
+    Input may be a numpy array or a torch tensor already on the device (no host round trip for the BP stage).
+    """
+
+    def __init__(self, dm, device="cpu", max_iter=30, osd_order=0, osd_method="osd_0", alpha=0.8, osd_chunk=2048):
+        import torch
+
+        self.dm, self.device, self.osd_chunk = dm, device, osd_chunk
+        self.bp = BatchedMinSumBP(dm.H, dm.priors, max_iter=max_iter, alpha=alpha, device=device)
+        self.osd = CpuBpOsd(dm.H, dm.priors, max_iter=max_iter, osd_order=osd_order, ms_scaling=alpha, osd_method=osd_method)
+        self.Ld = torch.as_tensor(dm.L.toarray(), dtype=torch.float32, device=device)  # (n_obs, faults)
+        self.Lcsr = sp.csr_matrix(dm.L, dtype=np.int64)
+        self.last: dict = {}
+
+    def obs_from_errors(self, est: np.ndarray) -> np.ndarray:
+        return (np.asarray(self.Lcsr @ est.T.astype(np.int64)).T % 2).astype(np.uint8)
+
+    def decode_batch(self, S):
+        import torch
+
+        n = len(S)
+        obs = np.zeros((n, self.dm.L.shape[0]), np.uint8)
+        n_bad = 0
+        step = self.osd_chunk
+        for i in range(0, n, step):
+            chunk = S[i : i + step]
+            est, conv = self.bp.decode(chunk, to_numpy=False)
+            obs[i : i + step] = ((est.float() @ self.Ld.T) % 2).to(torch.uint8).cpu().numpy()
+            bad = torch.nonzero(~conv).flatten()
+            if len(bad):
+                Sb = chunk[bad] if torch.is_tensor(chunk) else chunk[bad.cpu().numpy()]
+                Sb = Sb.cpu().numpy() if torch.is_tensor(Sb) else Sb
+                e = self.osd.decode_batch(Sb.astype(np.uint8))
+                obs[i + bad.cpu().numpy()] = self.obs_from_errors(e)
+                n_bad += len(bad)
+        self.last = dict(fallback_frac=n_bad / max(1, n), n_fallback=n_bad)
+        return obs

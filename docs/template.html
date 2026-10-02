@@ -50,6 +50,11 @@
   </div>
   <div class="card"><b>Single-shot latency (µs) &amp; throughput</b><div id="lat"></div></div>
 
+  <div id="pipe_sec" style="display:none">
+    <h2>Full pipeline: AI pre-decoder (GPU) + GPU decoder vs CPU baselines</h2>
+    <div class="card"><div class="note">Same shots, total wall-clock (stage 1 + stage 2, transfers included). "vs PyMatching" and "vs CPU BP+OSD" are per-shot time ratios (&gt;1 means faster). CPU BP+OSD rows use a subset of shots because they are slow.</div><div id="pipe_tab"></div></div>
+  </div>
+
   <div id="ising_sec" style="display:none">
     <h2>Head-to-head with NVIDIA Ising (same shots, NVIDIA circuit + noise model)</h2>
     <div class="card"><div id="ising_tab"></div></div>
@@ -116,6 +121,15 @@ function render(){
   Plotly.newPlot("gt", tg, {...layout("Global-decoder speed-up (stage 2 only)","physical error rate p","x faster"), barmode:"group"}, {displayModeBar:false});
   const wk = names.filter(n=>n!=="pymatching (CPU)" && dec[n].some(r=>r.syndrome_weight_kept!=null)).map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r.syndrome_weight_kept), name:n, type:"bar", marker:{color:colors[(i+1)%6]}}));
   Plotly.newPlot("wk", wk, {...layout("Syndrome weight left for the global decoder","physical error rate p","fraction of fired detectors"), barmode:"group"}, {displayModeBar:false});
+  const P = run.pipeline || [];
+  $("pipe_sec").style.display = P.length ? "block" : "none";
+  if (P.length) {
+    const key = r => r.d+"|"+r.p, pm = {}, bo = {};
+    P.forEach(r => { if (r.decoder.startsWith("CPU: pymatching")) pm[key(r)] = r.us_per_shot; if (r.decoder.startsWith("CPU: BP+OSD")) bo[key(r)] = r.us_per_shot; });
+    $("pipe_tab").innerHTML = "<table><tr><th>d / p</th><th>pipeline</th><th>logical errors</th><th>LER</th><th>µs / shot</th><th>vs PyMatching</th><th>vs CPU BP+OSD</th><th>notes</th></tr>" +
+      P.map(r => `<tr><td>d=${r.d} p=${r.p}</td><td>${r.decoder}</td><td>${r.errors} / ${r.shots}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.us_per_shot,1)}</td>` +
+        `<td>${pm[key(r)] ? (pm[key(r)]/r.us_per_shot).toFixed(2)+"x" : "-"}</td><td>${bo[key(r)] ? (bo[key(r)]/r.us_per_shot).toFixed(1)+"x" : "-"}</td><td>${r.extra||""}</td></tr>`).join("") + "</table>";
+  }
   const I = run.ising || [];
   $("ising_sec").style.display = I.length ? "block" : "none";
   $("ising_tab").innerHTML = "<table><tr><th>d / p</th><th>decoder</th><th>LER</th><th>shots/s</th><th>stage 1 s</th><th>stage 2 s</th><th>syndrome kept</th></tr>" +

@@ -108,7 +108,7 @@ def build_context(repo, distance=9, n_rounds=None, p=0.005, shots=5000, basis="X
                            test=SimpleNamespace(meas_basis_test=basis, th_data=0.0, th_syn=0.0, sampling_mode="threshold",
                                                 temperature=1.0, temperature_data=None, temperature_syn=None, n_rounds=n_rounds))
     pipe = Pipe(model, ecfg, build_maps(distance, code_rotation), torch.device(device)).to(device).eval()
-    return SimpleNamespace(pipe=pipe, det=det, obs=obs[:, 0], matcher=matcher, device=device, d=distance, rounds=n_rounds,
+    return SimpleNamespace(pipe=pipe, det=det, obs=obs[:, 0], matcher=matcher, circuit=sc, device=device, d=distance, rounds=n_rounds,
                            p=p, trained=bool(weights), model_id=model_id, shots=shots)
 
 
@@ -195,4 +195,95 @@ def run_comparison(ctx, lat_shots: int = 200, log=print) -> list[dict]:
                     s["accept_rate"], s["syndrome_weight_kept"], s["t_gate"], s["t_match"]))
     for r in rows:
         log(f"  d={ctx.d} p={ctx.p} {r['decoder']:55s} LER={r['ler']:.2e} {r['throughput_sps']:,.0f} shots/s")
+    return rows
+
+
+def run_full_pipeline(ctx, cpu_shots: int = 1000, max_iter: int = 30, log=print) -> list[dict]:
+    """End-to-end comparison on identical shots:
+
+      CPU baselines : PyMatching; CPU BP+OSD (ldpc)                      (BP+OSD on the first `cpu_shots` shots only: it is slow)
+      AI pre-decoder: NVIDIA Ising + PyMatching; Ising + CPU BP+OSD
+      FULL PIPELINE : NVIDIA Ising (GPU) -> GPU BP (+ CPU OSD fallback for the shots BP cannot resolve)
+
+    Every row reports logical errors and total wall-clock time (stage 1 + stage 2, transfers included, GPU-synchronised).
+    """
+    import torch
+
+    from .data import dem_matrices
+    from .decoders import CpuBpOsd, DemBpOsd
+
+    dev, det, obs, m = ctx.device, ctx.det, ctx.obs, ctx.matcher
+    n = len(det)
+    k = min(n, cpu_shots)
+    tag = "" if ctx.trained else " [RANDOM WEIGHTS: LER not meaningful]"
+    rows = []
+
+    def add(name, errs, shots, t1, t2, extra="", kept=np.nan):
+        ler, lo, hi = wilson(errs, shots)
+        total = t1 + t2
+        rows.append(dict(code="surface-nvidia-circuit", d=ctx.d, rounds=ctx.rounds, p=ctx.p, decoder=name + (tag if "Ising" in name else ""),
+                         device=dev, shots=shots, errors=errs, ler=ler, ler_lo=lo, ler_hi=hi, throughput_sps=shots / total,
+                         total_time_s=total, us_per_shot=1e6 * total / shots, t_stage1_s=t1, t_global_s=t2,
+                         syndrome_weight_kept=kept, extra=extra))
+        log(f"  d={ctx.d} p={ctx.p} {rows[-1]['decoder']:62s} errs={errs}/{shots} {1e6 * total / shots:9.1f} us/shot")
+
+    # --- CPU baseline 1: PyMatching ---
+    m.decode_batch(det[:500])
+    t0 = time.perf_counter()
+    pm = np.asarray(m.decode_batch(det), dtype=np.uint8).reshape(n, -1)[:, 0]
+    add("CPU: pymatching", int((pm != obs).sum()), n, 0.0, time.perf_counter() - t0)
+
+    dm = dem_matrices(ctx.circuit)
+    cpu_osd = CpuBpOsd(dm.H, dm.priors, max_iter=max_iter, osd_order=0, osd_method="osd_0")
+    gpu_dec = DemBpOsd(dm, device=dev, max_iter=max_iter)
+
+    # --- CPU baseline 2: BP+OSD on raw syndromes (subset) ---
+    try:
+        t0 = time.perf_counter()
+        e = cpu_osd.decode_batch(det[:k])
+        t = time.perf_counter() - t0
+        add("CPU: BP+OSD (ldpc)", int((gpu_dec.obs_from_errors(e)[:, 0] != obs[:k]).sum()), k, 0.0, t, extra=f"first {k} shots only")
+    except Exception as exc:
+        log(f"  CPU BP+OSD failed: {type(exc).__name__}: {exc}")
+
+    # --- Ising stage 1 (GPU), timed once on the full batch; reused by the three AI rows ---
+    dt = torch.from_numpy(det).to(torch.uint8).to(dev)
+    with torch.no_grad():
+        ctx.pipe(dt)  # warm up on the full batch shape (torch.compile specialises on shape)
+        ctx.pipe(dt)
+    t0 = now(dev)
+    with torch.no_grad():
+        out = ctx.pipe(dt)
+    t_pd = now(dev) - t0
+    flip_t = out[:, 0].round().to(torch.uint8)
+    res_t = out[:, 1:].round().to(torch.uint8)
+    flip = flip_t.cpu().numpy()
+    res = res_t.cpu().numpy()
+    kept = float(res.sum()) / max(1.0, float(det.sum()))
+
+    # --- AI + PyMatching (CPU global decoder) ---
+    t0 = time.perf_counter()
+    pmr = np.asarray(m.decode_batch(res), dtype=np.uint8).reshape(n, -1)[:, 0]
+    add("NVIDIA Ising (GPU) + pymatching (CPU)", int(((flip ^ pmr) != obs).sum()), n, t_pd, time.perf_counter() - t0, kept=kept)
+
+    # --- AI + CPU BP+OSD (subset) ---
+    try:
+        t0 = time.perf_counter()
+        e = cpu_osd.decode_batch(res[:k])
+        t = time.perf_counter() - t0
+        pred = flip[:k] ^ gpu_dec.obs_from_errors(e)[:, 0]
+        add("NVIDIA Ising (GPU) + BP+OSD (CPU)", int((pred != obs[:k]).sum()), k, t_pd * k / n, t, kept=kept, extra=f"BP+OSD stage on first {k} shots; stage 1 scaled to {k}")
+    except Exception as exc:
+        log(f"  Ising + CPU BP+OSD failed: {type(exc).__name__}: {exc}")
+
+    # --- FULL PIPELINE: Ising (GPU) -> GPU BP (+ OSD fallback) ---
+    try:
+        gpu_dec.decode_batch(res_t[:256])  # warm up kernels
+        t0 = now(dev)
+        g = gpu_dec.decode_batch(res_t)  # residual stays on the GPU for the BP stage
+        t2 = now(dev) - t0
+        add("FULL: NVIDIA Ising (GPU) -> GPU BP (+OSD fallback)", int(((flip ^ g[:, 0]) != obs).sum()), n, t_pd, t2, kept=kept,
+            extra=f"BP fallback to CPU OSD on {100 * gpu_dec.last['fallback_frac']:.1f}% of shots")
+    except Exception as exc:
+        log(f"  FULL pipeline failed: {type(exc).__name__}: {exc}")
     return rows

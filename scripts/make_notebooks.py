@@ -77,7 +77,8 @@ if RUN_ISING:
     if not os.path.exists("third_party/Ising-Decoding"):
         subprocess.run(["git", "clone", "--depth", "1", "https://github.com/NVIDIA/Ising-Decoding.git", "third_party/Ising-Decoding"], check=True)
     subprocess.run("pip -q install safetensors omegaconf hydra-core huggingface_hub beliefmatching", shell=True)
-    subprocess.run("python scripts/run_ising_bench.py --repo third_party/Ising-Decoding --download --device cuda --distances 9 13 --ps 0.003 0.005 --shots 20000 --tag colab-ising", shell=True)"""
+    subprocess.run("python scripts/run_ising_bench.py --repo third_party/Ising-Decoding --download --device cuda --distances 9 13 --ps 0.003 0.005 --shots 20000 --tag colab-ising", shell=True)
+    subprocess.run("python scripts/run_full_pipeline.py --repo third_party/Ising-Decoding --download --device cuda --distances 9 13 --ps 0.003 0.005 --shots 20000 --cpu-shots 1000 --tag colab-pipeline", shell=True)"""
 
 CUDAQ_CELL = """import subprocess
 if RUN_CUDAQ:
@@ -97,7 +98,7 @@ for f in sorted(glob.glob("results/colab-*/*.csv")):
 
 nb("04_run_everything_colab.ipynb", [
     ("md", "# 04 - Run everything (Runtime > Run all)\n"
-           "Runs, in order: setup check, unit tests, GPU benchmarks (surface code + qLDPC), the NVIDIA Ising head-to-head, an optional CUDA-Q QEC step, then builds the website and downloads one zip.\n\n"
+           "Runs, in order: setup check, unit tests, GPU benchmarks (surface code + qLDPC), the NVIDIA Ising head-to-head, the full AI-pre-decoder + GPU-decoder pipeline vs CPU baselines, an optional CUDA-Q QEC step, then builds the website and downloads one zip.\n\n"
            "**Before you run:** Runtime > Change runtime type > **T4 GPU**. Settings are in the first code cell. Start with `PROFILE = \"quick\"`.\n\n"
            "**Ising step (optional):** accept the terms at https://huggingface.co/nvidia/ising_decoder_surface_code_1_fast , create a *read* token and add it as the Colab secret `HF_TOKEN` (key icon, notebook access ON). Without it that step is skipped and everything else still runs. Never paste the token into a cell."),
     ("code", RUN_ALL_SETUP),

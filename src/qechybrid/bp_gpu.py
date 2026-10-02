@@ -104,6 +104,8 @@ class BatchedMinSumBP:
         pr = np.clip(np.asarray(priors, dtype=np.float64), 1e-9, 1 - 1e-9)
         self.llr0 = t(np.log((1 - pr) / pr), torch.float32)
         self.slot = t(np.arange(dc))
+        # keep the (shots x checks x max-degree) message tensors to a sane size for large, irregular matrices
+        self.chunk = int(min(self.chunk, max(64, 4e7 // max(1, m * dc))))
 
     @torch.no_grad()
     def _decode_chunk(self, syn: torch.Tensor):
@@ -140,12 +142,17 @@ class BatchedMinSumBP:
         out[act] = hard
         return out, conv
 
-    def decode(self, syndromes):
-        """syndromes: [B, m] in {0,1}. Returns (estimates uint8, converged bool) as numpy."""
-        s = torch.as_tensor(np.asarray(syndromes), dtype=torch.float32, device=self.device)
+    def decode(self, syndromes, to_numpy: bool = True):
+        """syndromes: [B, m] in {0,1} (numpy or torch, any device). Returns (estimates, converged);
+        numpy uint8/bool by default, or bool tensors left on the device with to_numpy=False."""
+        if torch.is_tensor(syndromes):
+            s = syndromes.to(device=self.device, dtype=torch.float32)
+        else:
+            s = torch.as_tensor(np.asarray(syndromes), dtype=torch.float32, device=self.device)
         outs, convs = [], []
         for i in range(0, s.shape[0], self.chunk):
             o, c = self._decode_chunk(s[i : i + self.chunk])
             outs.append(o)
             convs.append(c)
-        return torch.cat(outs).to(torch.uint8).cpu().numpy(), torch.cat(convs).cpu().numpy()
+        o, c = torch.cat(outs), torch.cat(convs)
+        return (o.to(torch.uint8).cpu().numpy(), c.cpu().numpy()) if to_numpy else (o, c)
