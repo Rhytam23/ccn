@@ -36,6 +36,7 @@
 
   <h2>Surface code (circuit-level noise, Stim)</h2>
   <div class="card">Distance <select id="d"></select> <span class="note">Latency table and curves update with the selection.</span></div>
+  <div class="card"><div id="frontier"></div><div class="note">Each point compares identical shots to PyMatching. This is a measured trade-off, not a proven optimal frontier; error-count differences have sampling uncertainty.</div></div>
   <div class="row">
     <div class="card"><div id="ler"></div></div>
     <div class="card"><div id="thr"></div></div>
@@ -45,7 +46,7 @@
     <div class="card"><div id="acc"></div></div>
   </div>
   <div class="row">
-    <div class="card"><div id="gt"></div><div class="note">Time spent in the exact global decoder (PyMatching) per batch, relative to decoding the raw syndromes. This part is hardware-independent evidence that pre-decoding makes the hard problem easier.</div></div>
+    <div class="card"><div id="gt"></div><div class="note">Time spent in the global decoder (PyMatching) per batch, relative to decoding raw syndromes on this machine. This is a stage timing, not end-to-end throughput.</div></div>
     <div class="card"><div id="wk"></div></div>
   </div>
   <div class="card"><b>Single-shot latency (µs) &amp; throughput</b><div id="lat"></div></div>
@@ -70,8 +71,10 @@
   <h2>Reproduce</h2>
   <pre>git clone &lt;repo&gt; &amp;&amp; cd &lt;repo&gt;
 python -m venv .venv &amp;&amp; . .venv/bin/activate
-pip install -r requirements.txt &amp;&amp; pip install -e .
-python scripts/run_benchmarks.py --profile full --device auto --tag my-run
+# Install the PyTorch build for this CUDA host first.
+pip install -e ".[dev]"
+python -m pytest -q
+python scripts/run_benchmarks.py --profile full --device cuda --surface-modes none zero local --reps 5 --tag my-run
 python scripts/make_report.py</pre>
   <p class="note">Or open <code>notebooks/01_run_benchmarks_colab.ipynb</code> in Google Colab (free T4 GPU).</p>
 </main>
@@ -90,6 +93,9 @@ function render(){
   $("meta").textContent = ` device=${m.device||"?"} gpu=${m.gpu||"none (CPU run)"} torch=${m.torch||"?"} cudaq-qec=${m.cudaq_qec||"?"}`;
   $("honesty").innerHTML = m.gpu ? "GPU run: numbers measured on <b>"+m.gpu+"</b>." :
     "<b>CPU-only run.</b> The GPU pre-decoder is running on CPU here, so it is <i>not</i> expected to beat PyMatching in this run. Re-run on a GPU (Colab) for the accelerated numbers.";
+  $("honesty").innerHTML += m.benchmark_protocol === "median-paired-v2" ?
+    " Repeated medians ("+m.throughput_reps+" repetitions); timing spread and paired ratios are saved in the CSV." :
+    " <b>Historical timing protocol.</b> Surface throughput used best-of-two and qLDPC one repetition. CPU-only surface modes synchronized CUDA in GPU runs; marginal ratios need a corrected GPU rerun.";
   const S = run.surface || [];
   (function(){
     const Q0 = run.qldpc || [], isGpu = !!m.gpu;
@@ -97,17 +103,26 @@ function render(){
     if(!isGpu) return;
     $("sum_title").textContent = "GPU benchmark summary - " + m.gpu + " (" + (m.profile||"?") + " profile)";
     const bs = Object.fromEntries(S.filter(r=>r.decoder==="pymatching (CPU)").map(r=>[r.d+"|"+r.p, r]));
-    const sr = S.filter(r=>r.decoder.startsWith("GPU local pre-decoder")).map(r=>({k:"d="+r.d+" p="+r.p+(r.decoder.includes("(safe")?" [safe r=2]":r.decoder.includes("(fast")?" [fast r=1]":""), x:r.throughput_sps/bs[r.d+"|"+r.p].throughput_sps, e:r.errors, eb:bs[r.d+"|"+r.p].errors}));
+    const sr = S.filter(r=>r.decoder.startsWith("GPU local pre-decoder")).map(r=>({k:"d="+r.d+" p="+r.p+(r.decoder.includes("r=2")?" [conservative r=2]":r.decoder.includes("(fast")?" [fast r=1]":""), x:r.throughput_sps/bs[r.d+"|"+r.p].throughput_sps, e:r.errors, eb:bs[r.d+"|"+r.p].errors}));
     const bq = Object.fromEntries(Q0.filter(r=>r.decoder.includes("ldpc BP")).map(r=>[r.code+"|"+r.p, r]));
     const qr = Q0.filter(r=>r.decoder.startsWith("GPU")).map(r=>({k:r.code+" p="+r.p, x:r.throughput_sps/bq[r.code+"|"+r.p].throughput_sps, e:r.errors, eb:bq[r.code+"|"+r.p].errors}));
     const tbl = (title, rs) => rs.length ? "<p><b>"+title+"</b>: throughput ratio "+Math.min(...rs.map(r=>r.x)).toFixed(2)+"x to "+Math.max(...rs.map(r=>r.x)).toFixed(2)+"x</p><table><tr><th>case</th><th>throughput ratio</th><th>logical errors (ours / baseline)</th></tr>"+
       rs.map(r=>`<tr><td>${r.k}</td><td>${r.x.toFixed(2)}x</td><td>${r.e} / ${r.eb}</td></tr>`).join("")+"</table>" : "";
-    $("sum_body").innerHTML = tbl("qLDPC: GPU batched BP vs C++ ldpc", qr) + tbl("Surface code: GPU pre-decoder + PyMatching vs PyMatching alone" + (S.some(r=>r.decoder.includes("(safe")) ? "" : " (first, aggressive radius-1 rule)"), sr);
+    $("sum_body").innerHTML = tbl("qLDPC: GPU batched BP vs C++ ldpc", qr) + tbl("Surface code: GPU pre-decoder + PyMatching vs PyMatching alone" + (S.some(r=>r.decoder.includes("r=2")) ? "" : " (first, aggressive radius-1 rule)"), sr);
   })();
   const ds = [...new Set(S.map(r=>r.d))]; if(!$("d").options.length) ds.forEach(d=>$("d").add(new Option("d="+d, d)));
   const d = +$("d").value || ds[0];
   const rows = S.filter(r=>r.d===d), dec = groupBy(rows,"decoder");
   const names = Object.keys(dec);
+  const refs = Object.fromEntries((dec["pymatching (CPU)"]||[]).map(r=>[r.p,r]));
+  const frontier = names.filter(n=>n.startsWith("GPU local pre-decoder")).map((n,i)=>({
+    x:dec[n].map(r=>r.throughput_sps/refs[r.p].throughput_sps),
+    y:dec[n].map(r=>1e5*(r.ler-refs[r.p].ler)), mode:"markers", name:n,
+    text:dec[n].map(r=>`d=${r.d}, p=${r.p}, ${r.shots} shots; errors ${r.errors} / ${refs[r.p].errors}`),
+    marker:{color:colors[(i+2)%6],symbol:n.includes("r=2")?"circle":"triangle-up",size:10},
+    hovertemplate:"%{text}<br>throughput ratio=%{x:.3f}<br>LER difference × 100,000=%{y:.1f}<extra></extra>"}));
+  Plotly.newPlot("frontier", frontier, {...layout("Accuracy / batch-throughput trade-off (d="+d+")","Throughput / PyMatching throughput","LER difference × 100,000"),
+    shapes:[{type:"line",xref:"x",yref:"paper",x0:1,x1:1,y0:0,y1:1,line:{color:"#8b949e",dash:"dash"}}]}, {displayModeBar:false});
   const traces = (key, mode="lines+markers") => names.map((n,i)=>({x:dec[n].map(r=>r.p), y:dec[n].map(r=>r[key]), name:n, mode, marker:{color:colors[i%6]}, line:{color:colors[i%6]}}));
   Plotly.newPlot("ler", traces("ler"), layout("Logical error rate vs physical p (d="+d+")","physical error rate p","LER","log"), {displayModeBar:false});
   Plotly.newPlot("thr", traces("throughput_sps"), layout("Batched throughput","physical error rate p","shots / s","log"), {displayModeBar:false});
@@ -134,18 +149,21 @@ function render(){
   $("ising_sec").style.display = I.length ? "block" : "none";
   $("ising_tab").innerHTML = "<table><tr><th>d / p</th><th>decoder</th><th>LER</th><th>shots/s</th><th>stage 1 s</th><th>stage 2 s</th><th>syndrome kept</th></tr>" +
     I.map(r=>`<tr><td>d=${r.d} p=${r.p}</td><td>${r.decoder}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${r.t_stage1_s==null?"-":Number(r.t_stage1_s).toFixed(3)}</td><td>${r.t_global_s==null?"-":Number(r.t_global_s).toFixed(3)}</td><td>${r.syndrome_weight_kept==null?"-":(100*r.syndrome_weight_kept).toFixed(0)+"%"}</td></tr>`).join("") + "</table>";
-  $("lat").innerHTML = "<table><tr><th>decoder</th><th>p</th><th>LER</th><th>throughput/s</th><th>p50 µs</th><th>p95 µs</th><th>p99 µs</th><th>256-batch ms</th><th>fast-path</th></tr>" +
-    rows.map(r=>`<tr><td>${r.decoder}</td><td>${r.p}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p95_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${fmt(r.lat_b256_ms,2)}</td><td>${fmt(100*r.accept_rate,1)}%</td></tr>`).join("") + "</table>";
+  const paired = r => r.paired_ratio_median == null ? "-" : `${fmt(r.paired_ratio_median,3)}x [${fmt(r.paired_ratio_min,3)}, ${fmt(r.paired_ratio_max,3)}]`;
+  $("lat").innerHTML = "<table><tr><th>decoder</th><th>p</th><th>LER</th><th>throughput/s</th><th>paired ratio [min,max]</th><th>p50 µs</th><th>p95 µs</th><th>p99 µs</th><th>256-batch ms</th><th>fast-path</th></tr>" +
+    rows.map(r=>`<tr><td>${r.decoder}</td><td>${r.p}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${paired(r)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p95_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${fmt(r.lat_b256_ms,2)}</td><td>${fmt(100*r.accept_rate,1)}%</td></tr>`).join("") + "</table>";
 
   const Q = run.qldpc || [], qd = groupBy(Q,"decoder"), qn = Object.keys(qd);
   const lab = r => r.code+" p="+r.p;
   const qtr = (key,type) => qn.map((n,i)=>({x:qd[n].map(lab), y:qd[n].map(r=>r[key]), name:n, type, marker:{color:colors[i%6]}}));
   Plotly.newPlot("q_thr", qtr("throughput_sps","bar"), {...layout("BP+OSD throughput","code / p","shots / s","log"), barmode:"group"}, {displayModeBar:false});
-  Plotly.newPlot("q_ler", qtr("ler","bar"), {...layout("Logical error rate (must match)","code / p","LER","log"), barmode:"group"}, {displayModeBar:false});
-  $("q_tab").innerHTML = "<table><tr><th>code / p</th><th>decoder</th><th>LER</th><th>shots/s</th><th>p50 µs</th><th>p99 µs</th><th>256-batch ms</th><th>BP converged</th></tr>" +
-    Q.map(r=>`<tr><td>${lab(r)}</td><td>${r.decoder}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${fmt(r.lat_b256_ms,2)}</td><td>${r.accept_rate==null?"-":fmt(100*r.accept_rate,1)+"%"}</td></tr>`).join("") + "</table>";
+  Plotly.newPlot("q_ler", qtr("ler","bar"), {...layout("Logical error rate (same shots)","code / p","LER","log"), barmode:"group"}, {displayModeBar:false});
+  $("q_tab").innerHTML = "<table><tr><th>code / p</th><th>decoder</th><th>LER</th><th>shots/s</th><th>paired ratio [min,max]</th><th>p50 µs</th><th>p99 µs</th><th>256-batch ms</th><th>BP converged</th></tr>" +
+    Q.map(r=>`<tr><td>${lab(r)}</td><td>${r.decoder}</td><td>${Number(r.ler).toExponential(2)}</td><td>${fmt(r.throughput_sps)}</td><td>${paired(r)}</td><td>${fmt(r.lat_p50_us,1)}</td><td>${fmt(r.lat_p99_us,1)}</td><td>${fmt(r.lat_b256_ms,2)}</td><td>${r.accept_rate==null?"-":fmt(100*r.accept_rate,1)+"%"}</td></tr>`).join("") + "</table>";
 }
 Object.keys(RUNS).forEach(t=>$("run").add(new Option(t,t)));
+const correctedRuns = Object.keys(RUNS).filter(t=>RUNS[t].meta?.benchmark_protocol === "median-paired-v2");
+if (correctedRuns.length) $("run").value = correctedRuns.sort((a,b)=>(RUNS[b].meta.timestamp||"").localeCompare(RUNS[a].meta.timestamp||""))[0];
 $("run").onchange = ()=>{ $("d").innerHTML=""; render(); }; $("d").onchange = render;
 render();
 </script>

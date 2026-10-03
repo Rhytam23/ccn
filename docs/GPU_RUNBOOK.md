@@ -1,5 +1,27 @@
 # GPU runbook (Google Colab, free tier)
 
+## Corrected measurements (any CUDA Python host)
+
+Use a fresh tag so historical measurements remain intact. After installing this
+branch and the appropriate CUDA PyTorch build, verify `torch.cuda.is_available()`
+and start with the untrained local path:
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest -q
+python scripts/run_benchmarks.py --profile quick --device cuda --only surface --surface-modes none zero local --reps 5 --tag gpu-corrected-quick
+python scripts/run_benchmarks.py --profile full --device cuda --only surface --surface-modes none zero local --reps 10 --tag gpu-corrected-full
+python scripts/run_benchmarks.py --profile full --device cuda --only qldpc --reps 5 --tag gpu-corrected-qldpc
+python scripts/make_report.py
+```
+
+Start with quick before spending a limited GPU session on full. The full profile
+uses 200,000 surface shots per point; inspect error counts and Wilson intervals
+before making accuracy claims. No fixed shot count guarantees enough errors at
+low LER. The learned gate remains an optional ablation (`--surface-modes nn`).
+Hugging Face/NVIDIA model access and a local CUDA PyTorch runtime are separate
+requirements: the commands above need a host on which this Python code can run.
+
 1. **Push the repo** to a public GitHub repository (see `PUBLISHING.md`).
 2. Colab > *File > Open notebook > GitHub* > your repo > `notebooks/04_run_everything_colab.ipynb` (runs every step below; `00`-`03` are single-step subsets).
 3. *Runtime > Change runtime type > T4 GPU*. Edit `GITHUB_REPO` in the first cell.

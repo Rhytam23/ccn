@@ -31,7 +31,7 @@ def ler(r):
 
 
 def rule_of(name):
-    return "safe r=2" if "(safe" in name else "fast r=1" if "(fast" in name else "first version (r=1)"
+    return "conservative r=2" if "r=2" in name else "fast r=1" if "(fast" in name else "first version (r=1)"
 
 
 # ---------- surface code ----------
@@ -80,19 +80,19 @@ definition = ("*Throughput ratio = GPU-pipeline shots/s ÷ CPU-baseline shots/s 
               "A value above 1 means the GPU pipeline is faster, below 1 means it is slower. It is not a latency.*")
 qldpc_bullet = (
     f"* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio {lo_q:.2f}x to {hi_q:.2f}x** vs the C++ `ldpc` BP+OSD "
-    f"(best: {best_q['code']}, p={best_q['p']}, {best_q['ratio']:.2f}x; the GPU is slightly slower at the points below 1.00x). "
-    f"Logical-error counts {'are identical' if same_errors else 'differ'} on the same shots at every point (not a proof of equivalence; intervals in `docs/RESULTS.md`).\n"
+    f"(best: {best_q['code']}, p={best_q['p']}, {best_q['ratio']:.2f}x; the GPU is slower at points below 1.00x). "
+    f"Logical-error counts {'are identical at every point' if same_errors else 'differ at some points'} on the same shots (not a proof of equivalence; intervals in the tables below).\n"
     f"  *This is batch throughput, not latency: single-shot latency is worse on the GPU than on the CPU, so this is not a real-time result.*\n"
 )
 head = (
-    f"**Measured on {gpu} (Google Colab, 2 vCPU), `{profile}` profile, {shots_s:,} surface-code shots and {shots_q:,} qLDPC shots per point; data: `results/{tag}/`.**\n\n"
+    f"**Measured on {gpu}, `{profile}` profile, {shots_s:,} surface-code shots and {shots_q:,} qLDPC shots per point; data: `results/{tag}/`. Hardware details are recorded below.**\n\n"
     f"{definition}\n\n"
     + qldpc_bullet
     + surf_lines +
     f"* Best single surface-code point: {best_s['rule']} rule, d={best_s['d']}, p={best_s['p']}, ratio {best_s['ratio']:.2f}x.\n"
 )
 
-has_new_rules = any("safe" in r for r in rules)
+has_new_rules = any("r=2" in r for r in rules)
 lat_rows = [r for r in rows if pd.notna(r["g256"]) and pd.notna(r["b256"])]
 if lat_rows:
     slower = sum(1 for r in lat_rows if r["g256"] > r["b256"])
@@ -102,12 +102,12 @@ if lat_rows:
 else:
     lat_text = "single-shot latency is worse on the GPU than on the CPU"
 if has_new_rules:
-    surf_title = "GPU local pre-decoder (safe radius-2 and fast radius-1 rules, fp16 stage 1) + PyMatching vs PyMatching alone"
+    surf_title = "GPU local pre-decoder (conservative radius-2 and fast radius-1 rules, fp16 stage 1) + PyMatching vs PyMatching alone"
     caveat = (
         f"Caveats: batch throughput only ({lat_text}); "
-        f"only d=5 and d=7 with {shots_s:,} shots per point, so error counts are small (a difference of a few errors is within noise); "
-        f"the qLDPC rows use only {shots_q:,} shots, too few to load a GPU, so the GPU BP looks slow here: the 20,000-shot `full` run (`results/colab-gpu/`) is the fair qLDPC comparison. "
-        "The `safe` rule showed no extra logical errors in these runs; the `fast` rule trades some logical errors for throughput. Ratios are relative to CPU baselines on the same Colab machine.\n"
+        f"d={int(s.d.min())} to {int(s.d.max())} with {shots_s:,} shots per point; low error counts do not establish accuracy equivalence. "
+        + (f"The qLDPC rows use only {shots_q:,} shots; consult a larger repeated run before interpreting GPU scaling. " if shots_q < 20000 else "") +
+        "Both rules are heuristics: inspect the per-point error counts, including any radius-2 degradation. Ratios are relative to CPU baselines on the same machine.\n"
     )
 else:
     surf_title = "GPU local pre-decoder (first, aggressive radius-1 rule) + PyMatching vs PyMatching alone"
@@ -123,16 +123,42 @@ def env_table(m):
         v = m.get(k)
         return note if v in (None, "") else v
 
-    items = [("GPU", g("gpu")), ("GPU memory (GB)", g("gpu_memory_gb")), ("CUDA (torch build)", g("cuda")), ("Python", g("python")),
+    items = [("GPU", g("gpu")), ("GPU memory (GB)", g("gpu_memory_gb")), ("NVIDIA driver", g("nvidia_driver")), ("CUDA (torch build)", g("cuda")), ("Python", g("python")),
              ("PyTorch", g("torch")), ("Stim", g("stim")), ("PyMatching", g("pymatching")), ("ldpc", g("ldpc")), ("CUDA-Q QEC", g("cudaq_qec")),
-             ("CPU cores (Colab)", g("cpu_count")), ("Platform", g("platform")), ("Git commit", g("git_commit")), ("Benchmark date", g("timestamp"))]
+             ("CPU logical cores", g("cpu_count")), ("Torch threads", g("torch_num_threads")),
+             ("Platform", g("platform")), ("Git commit", g("git_commit")), ("Git dirty", g("git_dirty")),
+             ("Source SHA256", g("source_sha256")), ("Protocol", g("benchmark_protocol")),
+             ("Throughput repetitions", g("throughput_reps")), ("Benchmark date", g("timestamp"))]
     return "| item | value |\n|---|---|\n" + "".join(f"| {k} | {v} |\n" for k, v in items)
 
 
 env = env_table(meta)
+protocol_note = ("Timings use repeated medians; raw repetitions and paired ratios are in the CSV."
+                 if meta.get("benchmark_protocol") == "median-paired-v2" else
+                 "Historical timing protocol: surface used best-of-two, qLDPC used one repetition, and CPU-only surface modes synchronized CUDA in GPU runs. Marginal surface ratios need a corrected GPU rerun.")
+
+
+def repetition_table(df):
+    if "paired_ratio_median" not in df:
+        return ""
+    table = ("\n## Repeated timing dispersion\n\n"
+             "Paired ratios use the corresponding CPU repetition; these ranges are timing spread, not confidence intervals.\n\n"
+             "| case | decoder | throughput min–max (shots/s) | paired ratio median [min, max] |\n"
+             "|---|---|---|---|\n")
+    for _, row in df.iterrows():
+        if row.decoder in ("pymatching (CPU)", "ldpc BP+OSD (CPU)"):
+            continue
+        case = f"d={int(row.d)}" if row.code == "surface" else row.code
+        table += (f"| {case}, p={row.p} | {row.decoder} | {fmt(row.throughput_min_sps)}–{fmt(row.throughput_max_sps)} | "
+                  f"{row.paired_ratio_median:.3f}x [{row.paired_ratio_min:.3f}, {row.paired_ratio_max:.3f}] |\n")
+    return table
+
+
 md = (
-    f"# GPU benchmark results ({gpu})\n\n{head}\n## qLDPC: GPU batched BP vs C++ ldpc\n\n{qt}\n"
-    f"## Surface code: {surf_title}\n\n{sur}\n{caveat}\n## Environment (from `results/{tag}/meta.json`)\n\n{env}"
+    f"# GPU benchmark results ({gpu})\n\n{protocol_note}\n\n{head}\n## qLDPC: GPU batched BP vs C++ ldpc\n\n{qt}\n"
+    f"## Surface code: {surf_title}\n\n{sur}\n{caveat}"
+    + repetition_table(pd.concat([s, q], ignore_index=True)) +
+    f"\n## Environment (from `results/{tag}/meta.json`)\n\n{env}"
 )
 (ROOT / "docs" / ("RESULTS.md" if tag == "colab-gpu" else f"RESULTS_{tag}.md")).write_text(md, encoding="utf-8")
 
@@ -152,7 +178,7 @@ def surface_rows(df):
 
 def rule_bullets(rs, title):
     out = ""
-    order = {"safe r=2": 0, "fast r=1": 1}
+    order = {"conservative r=2": 0, "fast r=1": 1}
     for rule in sorted({r["rule"] for r in rs}, key=lambda x: order.get(x, 2)):
         rr = [r for r in rs if r["rule"] == rule]
         xs = [r["ratio"] for r in rr]
@@ -170,15 +196,15 @@ cur_note = ""
 if quick_dir.exists():
     qm = json.loads((quick_dir / "meta.json").read_text())
     qs = pd.read_csv(quick_dir / "surface.csv")
-    cur = rule_bullets(surface_rows(qs), f"current code, quick profile (d=5, 7; {int(qs.shots.iloc[0]):,} shots; `results/colab-gpu-quick/`)")
-    cur_note = ("Surface-code results from the current code come from the quick profile only (d=5 and 7, small error counts); "
+    cur = rule_bullets(surface_rows(qs), f"historical radius-1/2 code, quick profile (d=5, 7; {int(qs.shots.iloc[0]):,} shots; `results/colab-gpu-quick/`)")
+    cur_note = ("Historical surface-code results for both radii come from the quick profile only (d=5 and 7, small error counts); "
                 "the older full-profile surface-code result (last bullet above) used the first, aggressive radius-1 rule and a slower stage 1.")
 old = rule_bullets(rows, f"older code, full profile (d=5 to 13; {shots_s:,} shots; `results/{tag}/`)")
 
 compact = ("| code | p | C++ ldpc BP+OSD (shots/s) | GPU BP + OSD fallback (shots/s) | throughput ratio | logical errors (GPU / ldpc) |\n|---|---|---|---|---|---|\n" +
            "".join(f"| {r['code']} | {r['p']} | {fmt(r['bt'])} | {fmt(r['ot'])} | **{r['ratio']:.2f}x** | {r['eo']} / {r['eb']} |\n" for r in qrows))
 readme_caveat = (
-    "Caveats: batch throughput only (the GPU is slower than the CPU for single shots; see `docs/RESULTS.md`). " + cur_note + " "
+    protocol_note + " Caveats: batch throughput only (the GPU is slower than the CPU for single shots; see `docs/RESULTS.md`). " + cur_note + " "
     "Ratios are relative to CPU baselines on the same Colab machine."
 )
 block = (

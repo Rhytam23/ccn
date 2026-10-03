@@ -18,6 +18,9 @@ class HybridDecoder:
 
     def __init__(self, matcher, gate=None, mode: str = "nn", device: str = "cpu", chunk: int = 65536, local=None):
         self.matcher, self.gate, self.mode, self.device, self.chunk = matcher, gate, mode, device, chunk
+        # CPU-only modes never touch CUDA, including their internal timers.
+        if mode in ("none", "zero"):
+            self.device = "cpu"
         self.local = local
         self.stats: dict = {}
 

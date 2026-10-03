@@ -1,5 +1,8 @@
 # Local (CPU) development. Install torch separately for your platform:
 #   CPU : pip install torch --index-url https://download.pytorch.org/whl/cpu
+# Then install the actual package and dev tools: python -m pip install -e ".[dev]"
+# pyproject.toml requires torch; installing it first selects the intended wheel.
+# For CUDA choose the matching PyTorch wheel index for your driver/runtime.
 numpy
 scipy
 pandas

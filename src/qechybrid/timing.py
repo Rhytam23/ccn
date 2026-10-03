@@ -9,7 +9,7 @@ def sync(device: str) -> None:
     if str(device).startswith("cuda"):
         import torch
 
-        torch.cuda.synchronize()
+        torch.cuda.synchronize(device)
 
 
 def now(device: str = "cpu") -> float:

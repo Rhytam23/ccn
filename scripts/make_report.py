@@ -50,6 +50,43 @@ def figures(runs):
         plt.tight_layout()
         plt.savefig(out / f"{tag}_surface_speedup.png", dpi=140)
         plt.close()
+        # A trade-off view: timing and accuracy must be read together.
+        baseline = s[s.decoder == "pymatching (CPU)"].set_index(["d", "p"])
+        local = s[s.decoder.str.startswith("GPU local pre-decoder")]
+        if local.empty:
+            continue
+        fig, ax = plt.subplots(figsize=(9, 5.2))
+        cases = sorted({(int(r.d), r.p) for _, r in local.iterrows()})
+        case_id = {key: i + 1 for i, key in enumerate(cases)}
+        for name, group in local.groupby("decoder"):
+            radius2 = "r=2" in name
+            xs, ys = [], []
+            for _, row in group.iterrows():
+                ref = baseline.loc[(row.d, row.p)]
+                xs.append(row.throughput_sps / ref.throughput_sps)
+                ys.append(1e5 * (row.ler - ref.ler))
+                ax.annotate(f"[{case_id[(int(row.d), row.p)]}]", (xs[-1], ys[-1]),
+                            xytext=(5, 5 if radius2 else -13), textcoords="offset points", fontsize=8)
+            ax.scatter(xs, ys, marker="o" if radius2 else "^", s=50,
+                       label="conservative r=2" if radius2 else "aggressive r=1")
+        ax.axvline(1, color="0.4", lw=0.8, linestyle="--")
+        ax.axhline(0, color="0.4", lw=0.8)
+        ax.set_xlabel("Batch throughput / PyMatching throughput (>1: faster)")
+        ax.set_ylabel("LER difference × 100,000 (ours − PyMatching)")
+        protocol = run["meta"].get("benchmark_protocol")
+        ax.set_title(f"Surface accuracy / throughput trade-off [{tag}]")
+        ax.legend(fontsize=8)
+        ax.margins(x=0.1, y=0.15)
+        note = ("Median repeated timings; differences are finite-sample observations."
+                if protocol == "median-paired-v2" else
+                "Historical timings: CPU timer used CUDA sync; corrected GPU rerun required.")
+        labels = [f"[{case_id[key]}] d={key[0]}, p={key[1]}" for key in cases]
+        case_legend = "\n".join("    ".join(labels[i:i + 4]) for i in range(0, len(labels), 4))
+        fig.text(0.5, 0.01, case_legend + "\n" + note + " No equivalence or optimal-frontier claim.",
+                 ha="center", fontsize=8)
+        fig.tight_layout(rect=(0, 0.06 + 0.03 * ((len(labels) + 3) // 4), 1, 1))
+        fig.savefig(out / f"{tag}_surface_frontier.png", dpi=140)
+        plt.close(fig)
 
 
 def main():

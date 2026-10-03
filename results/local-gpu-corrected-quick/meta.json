@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-10-03 01:54:41",
+  "git_commit": "1e0c610",
+  "git_branch": "codex/benchmark-validation",
+  "git_dirty": true,
+  "ldpc": "2.4.1",
+  "cuda": "13.0",
+  "nvidia_driver": "596.71",
+  "gpu_memory_gb": 4.0,
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.13.7",
+  "cpu_count": 16,
+  "torch": "2.14.1+cu130",
+  "torch_num_threads": 2,
+  "torch_num_interop_threads": 8,
+  "stim": "1.16.0",
+  "pymatching": "2.4.0",
+  "device": "cuda",
+  "gpu": "NVIDIA T600 Laptop GPU",
+  "source_sha256": "d55de1ba5484be92d8fddefe8506cd59350784bc4f5c91cd72eb02d8f3dfed82",
+  "cudaq_qec": "unavailable (ModuleNotFoundError: No module named 'cudaq_qec')",
+  "profile": "quick",
+  "which": [
+    "surface",
+    "qldpc"
+  ],
+  "benchmark_protocol": "median-paired-v2",
+  "throughput_reps": 5,
+  "decoder_order": "forward on even repetitions, reverse on odd; MLP separately paired with fresh CPU baseline",
+  "config": {
+    "surface": {
+      "ds": [
+        5,
+        7
+      ],
+      "ps": [
+        0.002,
+        0.004
+      ],
+      "shots": 20000,
+      "train": 200000,
+      "val": 50000,
+      "epochs": 6,
+      "lat": 500,
+      "reps": 5,
+      "modes": [
+        "none",
+        "zero",
+        "local"
+      ]
+    },
+    "qldpc": {
+      "codes": [
+        "bb72"
+      ],
+      "ps": [
+        0.02,
+        0.04
+      ],
+      "shots": 1000,
+      "lat": 200,
+      "reps": 5
+    }
+  }
+}

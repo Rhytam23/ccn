@@ -1,10 +1,12 @@
 # GPU benchmark results (Tesla T4)
 
-**Measured on Tesla T4 (Google Colab, 2 vCPU), `full` profile, 200,000 surface-code shots and 20,000 qLDPC shots per point; data: `results/colab-gpu/`.**
+Historical timing protocol: surface used best-of-two, qLDPC used one repetition, and CPU-only surface modes synchronized CUDA in GPU runs. Marginal surface ratios need a corrected GPU rerun.
+
+**Measured on Tesla T4, `full` profile, 200,000 surface-code shots and 20,000 qLDPC shots per point; data: `results/colab-gpu/`. Hardware details are recorded below.**
 
 *Throughput ratio = GPU-pipeline shots/s ÷ CPU-baseline shots/s on the same shots in the same session. A value above 1 means the GPU pipeline is faster, below 1 means it is slower. It is not a latency.*
 
-* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio 0.98x to 1.58x** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x; the GPU is slightly slower at the points below 1.00x). Logical-error counts are identical on the same shots at every point (not a proof of equivalence; intervals in `docs/RESULTS.md`).
+* **qLDPC (BB codes, code-capacity noise): GPU/CPU batch-throughput ratio 0.98x to 1.58x** vs the C++ `ldpc` BP+OSD (best: BB[[144,12,12]], p=0.02, 1.58x; the GPU is slower at points below 1.00x). Logical-error counts are identical at every point on the same shots (not a proof of equivalence; intervals in the tables below).
   *This is batch throughput, not latency: single-shot latency is worse on the GPU than on the CPU, so this is not a real-time result.*
 * **Surface code (circuit-level noise), first version (r=1) rule: throughput ratio 0.62x to 1.19x** (4 of 12 points above 1.02x; 344 more logical errors than PyMatching, summed over the points where ours was worse).
 * Best single surface-code point: first version (r=1) rule, d=5, p=0.002, ratio 1.19x.
@@ -45,6 +47,7 @@ Caveats: batch throughput only (single-shot latency is worse on the GPU than on 
 |---|---|
 | GPU | Tesla T4 |
 | GPU memory (GB) | not recorded in this run |
+| NVIDIA driver | not recorded in this run |
 | CUDA (torch build) | not recorded in this run |
 | Python | 3.13.15 |
 | PyTorch | 2.11.0+cu130 |
@@ -52,7 +55,12 @@ Caveats: batch throughput only (single-shot latency is worse on the GPU than on 
 | PyMatching | 2.4.0 |
 | ldpc | not recorded in this run |
 | CUDA-Q QEC | unavailable (ModuleNotFoundError: No module named 'cudaq_qec') |
-| CPU cores (Colab) | 2 |
+| CPU logical cores | 2 |
+| Torch threads | not recorded in this run |
 | Platform | Linux-6.6.122+-x86_64-with-glibc2.39 |
 | Git commit | not recorded in this run |
+| Git dirty | not recorded in this run |
+| Source SHA256 | not recorded in this run |
+| Protocol | not recorded in this run |
+| Throughput repetitions | not recorded in this run |
 | Benchmark date | 2026-10-02 08:17:26 |

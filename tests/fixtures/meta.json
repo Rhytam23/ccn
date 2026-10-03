@@ -1,0 +1,39 @@
+{
+  "environment": {
+    "timestamp": "2026-10-03 01:41:36",
+    "git_commit": "1e0c610",
+    "git_dirty": true,
+    "ldpc": "2.4.1",
+    "cuda": null,
+    "gpu_memory_gb": null,
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.13.7",
+    "cpu_count": 16,
+    "torch": "2.14.1+cpu",
+    "stim": "1.16.0",
+    "pymatching": "2.4.0",
+    "device": "cpu",
+    "gpu": null,
+    "cudaq_qec": "unavailable (ModuleNotFoundError: No module named 'cudaq_qec')"
+  },
+  "seed": 19,
+  "surface": {
+    "d": 5,
+    "p": 0.004,
+    "shots": 4096,
+    "errors": {
+      "matching": 29,
+      "radius1": 27,
+      "radius2": 29
+    }
+  },
+  "qldpc": {
+    "code": "bb72",
+    "p": 0.04,
+    "shots": 1024,
+    "errors": {
+      "cpu": 100,
+      "hybrid": 100
+    }
+  }
+}

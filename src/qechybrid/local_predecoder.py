@@ -13,8 +13,10 @@ A pair is only taken if the direct edge is no more expensive than sending both e
 to the boundary, which is the one case where MWPM would choose differently.
 Everything is sparse-matrix products over the whole batch, so it runs on CUDA unchanged.
 The residual syndrome goes to the global decoder. The local rule is a HEURISTIC, not
-provably MWPM-equivalent: measured, it costs ~4-25 % extra logical errors (see README), so
-always report logical-error counts next to any throughput ratio.
+provably MWPM-equivalent. Radius 2 is the more conservative rule: the stored quick T4
+run has one extra logical error at one point; radius 1 adds more errors at some points.
+These are finite-sample observations, not guarantees. Always report logical-error
+counts next to throughput, and see METHODOLOGY.md for historical timing limitations.
 """
 from __future__ import annotations
 
@@ -117,7 +119,7 @@ class LocalPreDecoder:
         for _ in range(self.passes):  # clearing a pair can expose new isolated pairs
             cnt = self._mm(self.A_all, f)
             iso = f * (cnt == one).to(f.dtype)
-            if self.radius >= 2:  # nothing else fired within two hops either (no extra logical errors in our tests)
+            if self.radius >= 2:  # require isolation within two hops; still a heuristic
                 iso = iso * (self._mm(self.A_r2, f) == one).to(f.dtype)
             mutual = iso * (self._mm(self.A_ok, iso) == one).to(f.dtype)
             flip = flip + (mutual * self._mm(self.A_obs, mutual)).sum(1, dtype=torch.float32) / 2.0
