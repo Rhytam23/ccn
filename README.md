@@ -1,4 +1,56 @@
-# qechybrid: GPU-accelerated hybrid quantum error-correction decoding
+<!-- Improved compatibility of back to top link: See: https://github.com/othneildrew/Best-README-Template/pull/73 -->
+<a id="readme-top"></a>
+
+<!-- PROJECT SHIELDS -->
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![License][license-shield]][license-url]
+
+
+<!-- PROJECT LOGO -->
+<br />
+<div align="center">
+<h3 align="center">qechybrid</h3>
+
+  <p align="center">
+    Quantum error correction needs fast classical decoding.
+    <br />
+    <a href="https://github.com/Rhytam23/ccn"><strong>Explore the docs »</strong></a>
+    <br />
+    <br />
+    <a href="https://nvidia.github.io/cudaq-qec/">View Demo</a>
+    &middot;
+    <a href="https://github.com/Rhytam23/ccn/issues/new?labels=bug">Report Bug</a>
+    &middot;
+    <a href="https://github.com/Rhytam23/ccn/issues/new?labels=enhancement">Request Feature</a>
+  </p>
+</div>
+
+
+<!-- TABLE OF CONTENTS -->
+<details>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#about-the-project">About The Project</a>
+      <ul>
+        <li><a href="#built-with">Built With</a></li>
+      </ul>
+    </li>
+    <li><a href="#getting-started">Getting Started</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#license">License</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ol>
+</details>
+
+
+<!-- ABOUT THE PROJECT -->
+## About The Project
 
 Quantum error correction needs fast classical decoding. This research repo measures
 how much batch throughput a GPU pre-decoder can gain, and what decoding accuracy it costs.
@@ -41,7 +93,8 @@ The historical results and detailed architecture follow below.
 Validation of each finding, exact regression tests, and larger local measurements:
 [docs/VALIDATION.md](docs/VALIDATION.md).
 
-## Pipelines
+### Pipelines
+
 
 Surface code (circuit-level noise, Stim). A pre-decoder removes the easy, local part of the syndrome; a global decoder handles what is left:
 
@@ -75,7 +128,8 @@ The Ising model outputs a partial logical correction and a *residual* syndrome (
 so BP (using the undecomposed DEM) or PyMatching (using the decomposed, graph-like DEM) can finish the job. Final answer = Ising's partial flip XOR the global decoder's flip.
 PyMatching stays the main surface-code baseline because it is the fastest practical CPU decoder; BP+OSD is run on the residual to test the GPU-decoder idea and to compare like with like against CPU BP+OSD.
 
-## How to read the numbers
+### How to read the numbers
+
 
 * **Throughput ratio** = GPU-pipeline shots/s ÷ CPU-baseline shots/s on the same shots in the same session. **Above 1: the GPU pipeline is faster. Below 1: it is slower.** It is not a latency.
 * **Latency ratio** (where quoted) = CPU latency ÷ GPU latency for the same batch size.
@@ -84,7 +138,9 @@ PyMatching stays the main surface-code baseline because it is the fastest practi
 * **What `x` means:** a number written like `1.58x` is a throughput ratio as defined above (the `x` is only a unit symbol); `0.98x` means the GPU pipeline was slightly slower. Ranges such as `0.98-1.58` in the history are the same ratio without the symbol.
 
 <!-- RESULTS:START -->
-## GPU benchmark results (Tesla T4)
+
+### GPU benchmark results (Tesla T4)
+
 
 **Measured on Tesla T4 (Google Colab, 2 vCPU); qLDPC: `full` profile, 20,000 shots per point (`results/colab-gpu/`).**
 
@@ -110,7 +166,8 @@ Historical timing protocol: surface used best-of-two, qLDPC used one repetition,
 Confidence intervals, surface-code tables and the environment record: [docs/RESULTS.md](docs/RESULTS.md), [docs/RESULTS_colab-gpu-quick.md](docs/RESULTS_colab-gpu-quick.md).
 <!-- RESULTS:END -->
 
-## Status at a glance
+### Status at a glance
+
 
 | Component | Status |
 |---|---|
@@ -122,7 +179,8 @@ Confidence intervals, surface-code tables and the environment record: [docs/RESU
 | CUDA-Q QEC `nv-qldpc-decoder` | **Not verified**: `cudaq-qec` was not installed in any run (the decoder is a closed-source library, see the [CUDA-Q QEC docs](https://nvidia.github.io/cudaq-qec/)) |
 | Full pipeline: Ising (GPU) -> GPU BP+OSD vs CPU baselines | **Not yet measured**: plumbing checked on CPU with random weights only |
 
-## Glossary
+### Glossary
+
 
 * **PyMatching / MWPM:** minimum-weight perfect matching on a graph of detectors; the standard fast surface-code decoder.
 * **BP (belief propagation):** iterative message passing on the parity-check graph; fast and parallel, but it can fail to converge on short cycles.
@@ -132,7 +190,8 @@ Confidence intervals, surface-code tables and the environment record: [docs/RESU
 * **qLDPC / bivariate-bicycle (BB) code:** a high-rate quantum code family; we use [[72,12,6]] and [[144,12,12]].
 * **Code-capacity vs circuit-level noise:** code-capacity assumes perfect syndrome measurement (simpler, used for the qLDPC codes); circuit-level models noisy gates and measurements (used for the surface code).
 
-## What is new here, what is not
+### What is new here, what is not
+
 
 **Our contribution is the combination and the measurement**: a GPU-batched BP implementation, a GPU surface-code pre-decoder with an accuracy/throughput dial, and a reproducible, identical-shot comparison framework
 around NVIDIA's Ising pre-decoder, with explicit throughput, latency and logical-error measurements, including the negative results.
@@ -156,13 +215,14 @@ around NVIDIA's Ising pre-decoder, with explicit throughput, latency and logical
 **What we do not claim:** a real-time (single-shot, microsecond) GPU advantage (in run 3 the GPU surface-code path took 630-880 µs per single shot vs 18-38 µs for PyMatching, and was slower at 6 of 8 points at 256-shot micro-batches); any Ising or full-pipeline throughput result
 (`results/colab-ising/` and `results/colab-pipeline/` do not exist yet); equivalence of the local rule to MWPM (it is a heuristic).
 
-### The full-pipeline experiment (`scripts/run_full_pipeline.py`, run by notebook 04): results pending
+#### The full-pipeline experiment (`scripts/run_full_pipeline.py`, run by notebook 04): results pending
 On identical shots (NVIDIA's circuit, trained Ising weights) it measures total wall-clock time and logical errors for CPU PyMatching, CPU BP+OSD, Ising + PyMatching, Ising + CPU BP+OSD,
 and the full pipeline Ising (GPU) -> GPU BP with CPU OSD fallback. Two CPU baselines are reported because "the CPU baseline" is ambiguous: CPU BP+OSD (same algorithm family, the like-for-like test of the GPU decoder)
 and PyMatching (the fastest practical CPU decoder, the test of practical usefulness). The experiment will determine whether the full pipeline improves on CPU BP+OSD and whether it can compete with PyMatching.
 In CPU plumbing runs (random weights, so the logical-error numbers are meaningless) CPU BP+OSD took about 13-33 ms per shot and PyMatching about 26-63 µs per shot at d=9.
 
-## What is in the repo
+### What is in the repo
+
 
 | Piece | File | Tests |
 |---|---|---|
@@ -177,12 +237,13 @@ In CPU plumbing runs (random weights, so the logical-error numbers are meaningle
 | Benchmark harness (LER with Wilson CIs, throughput, p50/p95/p99 single-shot latency, 256-shot micro-batch latency, environment record) | `bench.py`, `scripts/run_benchmarks.py` | unit-tested |
 | Results website (GitHub Pages ready) | `docs/index.html` (built by `scripts/make_report.py`) | element-id test |
 
-### Results layout
+#### Results layout
 `results/<tag>/` holds data only: `colab-gpu` (historical T4, full profile), `colab-gpu-quick` (historical T4, quick profile), `local-cpu` (historical CPU), and new corrected CPU/T600 quick/full runs. Ising/pipeline results are stored separately when available.
 Run notes live in `docs/runs/` (`colab-gpu-run1.md`, `colab-ising-run1.md`). From now on every `meta.json` also records the git commit, `ldpc` version, CUDA version and GPU memory;
 older runs lack some of these and `docs/RESULTS.md` says "not recorded".
 
-## Documentation
+### Documentation
+
 
 | Doc | Contents |
 |---|---|
@@ -194,16 +255,8 @@ older runs lack some of these and `docs/RESULTS.md` says "not recorded".
 | [docs/PITCH.md](docs/PITCH.md) | 3-minute pitch outline |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | dev workflow; `make test / quick / full / report` also work |
 
-## Quick start (local, CPU, virtual environment)
+### GPU run (free: Google Colab T4)
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: creates .venv, installs, runs tests
-# or: bash scripts/setup.sh                                    # Linux / macOS / WSL
-.\.venv\Scripts\python scripts/run_benchmarks.py --profile quick --device cpu --tag local-cpu
-.\.venv\Scripts\python scripts/make_report.py                  # -> docs/index.html
-```
-
-## GPU run (free: Google Colab T4)
 
 **Use one notebook: `notebooks/04_run_everything_colab.ipynb`.** It runs everything below in order with *Runtime > Run all*.
 
@@ -219,7 +272,8 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: create
 2. For the Ising and full-pipeline steps you need a free Hugging Face account, acceptance of the model terms, and a *read* token stored as the Colab secret `HF_TOKEN` (never paste it into a cell). Without it those steps are skipped.
 3. Download the zip, copy the `results/colab-*` folders into the repo, run `python scripts/make_report.py` and `python scripts/make_summary.py` (and `... colab-gpu-quick`), commit, and enable **GitHub Pages** (Settings > Pages > `main` / `docs`).
 
-## Results history (short)
+### Results history (short)
+
 
 * **Run 1 (first code):** GPU BP was slower than the C++ `ldpc` (ratio 0.07-0.34); the first surface-code pre-decoder reached at most 1.25.
 * **Run 2 (full profile, BP rewrite):** qLDPC ratio 0.98-1.58 with equal logical-error counts; the first (aggressive) surface-code rule 0.62-1.19 with extra logical errors at some points.
@@ -228,14 +282,107 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: create
 
 Full chronology with the numbers behind each statement: [docs/HISTORY.md](docs/HISTORY.md).
 
-## Tests
+### Notes
+
+
+* Noise: circuit-level (Stim `rotated_memory_z`) for the surface code; code-capacity bit-flip noise for the qLDPC codes (stated wherever results are shown). The Ising comparison uses NVIDIA's own circuit and noise model and is kept in separate tables.
+* NVIDIA Ising weights are under the NVIDIA Open Model License and are downloaded at run time, never committed.
+* License: MIT for this repository's code.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+### Built With
+
+* [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+* [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org/)
+* [![pandas](https://img.shields.io/badge/pandas-150458?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org/)
+* [![NumPy](https://img.shields.io/badge/NumPy-013243?style=for-the-badge&logo=numpy&logoColor=white)](https://numpy.org/)
+* [![pytest](https://img.shields.io/badge/pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+<!-- GETTING STARTED -->
+## Getting Started
+
+### Quick start (local, CPU, virtual environment)
+
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup.ps1     # Windows: creates .venv, installs, runs tests
+# or: bash scripts/setup.sh                                    # Linux / macOS / WSL
+.\.venv\Scripts\python scripts/run_benchmarks.py --profile quick --device cpu --tag local-cpu
+.\.venv\Scripts\python scripts/make_report.py                  # -> docs/index.html
+```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+<!-- USAGE EXAMPLES -->
+## Usage
+
+### Tests
+
 
 ```powershell
 .\.venv\Scripts\python -m pytest -q
 ```
 
-## Notes
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-* Noise: circuit-level (Stim `rotated_memory_z`) for the surface code; code-capacity bit-flip noise for the qLDPC codes (stated wherever results are shown). The Ising comparison uses NVIDIA's own circuit and noise model and is kept in separate tables.
-* NVIDIA Ising weights are under the NVIDIA Open Model License and are downloaded at run time, never committed.
-* License: MIT for this repository's code.
+
+<!-- ROADMAP -->
+## Roadmap
+
+See the [open issues](https://github.com/Rhytam23/ccn/issues) for a full list of proposed features (and known issues).
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+<!-- CONTRIBUTING -->
+## Contributing
+
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+Don't forget to give the project a star! Thanks again!
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+<!-- LICENSE -->
+## License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+<!-- CONTACT -->
+## Contact
+
+Rhytam Biswas - [@Rhytam23](https://github.com/Rhytam23)
+
+Project Link: [https://github.com/Rhytam23/ccn](https://github.com/Rhytam23/ccn)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+<!-- MARKDOWN LINKS & IMAGES -->
+[contributors-shield]: https://img.shields.io/github/contributors/Rhytam23/ccn.svg?style=for-the-badge
+[contributors-url]: https://github.com/Rhytam23/ccn/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/Rhytam23/ccn.svg?style=for-the-badge
+[forks-url]: https://github.com/Rhytam23/ccn/network/members
+[stars-shield]: https://img.shields.io/github/stars/Rhytam23/ccn.svg?style=for-the-badge
+[stars-url]: https://github.com/Rhytam23/ccn/stargazers
+[issues-shield]: https://img.shields.io/github/issues/Rhytam23/ccn.svg?style=for-the-badge
+[issues-url]: https://github.com/Rhytam23/ccn/issues
+[license-shield]: https://img.shields.io/github/license/Rhytam23/ccn.svg?style=for-the-badge
+[license-url]: https://github.com/Rhytam23/ccn/blob/main/LICENSE
